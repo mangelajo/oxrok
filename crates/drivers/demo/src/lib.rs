@@ -473,7 +473,6 @@ impl Acquisition {
         if !sink.send(Packet::header()) {
             return;
         }
-        sink.send(Packet::meta(Key::Samplerate, s.samplerate));
         let frames = s.limit_frames > 0;
         if frames {
             sink.send(Packet::FrameBegin);

@@ -10,15 +10,18 @@ carry over.
 ## Status
 
 Early. The workspace builds on Linux, macOS and Windows with a demo
-device, the `bits`, `hex`, `ascii` and `analog` outputs and a sigrok-cli
-style command line. Hardware drivers (Intronix LogicPort, fx2lafw) and the
-`.sr` session format come next; see `docs/ROADMAP.md`.
+device, a sigrok-cli style command line, the `bits`, `hex`, `ascii`,
+`analog`, `csv`, `vcd`, `binary` and `srzip` outputs, and `.sr`, VCD and
+binary inputs. Hardware drivers (Intronix LogicPort, fx2lafw) come next;
+see `docs/ROADMAP.md`.
 
 ```sh
 cargo install --path crates/cli
 oxrok --scan
 oxrok -d demo:logic_channels=4 -g Logic -c pattern=walking-one --samples 20 -O bits
 oxrok -d demo --show
+oxrok -d demo --samples 1k -o capture.sr      # a session file PulseView opens
+oxrok -i capture.sr -O csv
 ```
 
 The output after the first header line matches sigrok-cli byte for byte
@@ -29,7 +32,7 @@ for the same command, which is how the test suite checks it.
 | Crate | Content |
 |---|---|
 | `oxrok-core` | config keys and values, packets, the `Driver` and `Device` traits, sessions, parsing helpers |
-| `oxrok-formats` | text outputs; file formats later |
+| `oxrok-formats` | text outputs, the `.sr` session format, VCD, CSV and binary readers and writers |
 | `oxrok-driver-demo` | a logic and analog pattern generator with no hardware |
 | `oxrok` | the command line tool |
 

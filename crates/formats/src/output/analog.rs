@@ -10,23 +10,36 @@ pub(super) static MODULE: OutputModule = OutputModule {
     id: "analog",
     name: "Analog",
     description: "ASCII analog data values and units",
-    options: &[OutputOption {
-        id: "digits",
-        name: "Digits",
-        description: "Digits to show (all or spec)",
-        default: "all",
-    }],
+    options: &[
+        OutputOption {
+            id: "digits",
+            name: "Digits",
+            description: "Digits to show (all or spec)",
+            default: "all",
+        },
+        OutputOption {
+            id: "meta",
+            name: "Meta",
+            description: "Print META lines for metadata packets",
+            default: "true",
+        },
+    ],
     extensions: &[],
-    create: |ctx, _options| Ok(Box::new(Analog::new(ctx))),
+    analog: true,
+    create: |ctx, options| {
+        let meta = options.get("meta").is_none_or(|v| oxrok_core::util::parse_boolstring(v));
+        Ok(Box::new(Analog::new(ctx, meta)))
+    },
 };
 
 struct Analog {
     names: Vec<(usize, String)>,
+    meta: bool,
 }
 
 impl Analog {
-    fn new(ctx: &OutputContext) -> Self {
-        Analog { names: ctx.channels.iter().map(|c| (c.index, c.name.clone())).collect() }
+    fn new(ctx: &OutputContext, meta: bool) -> Self {
+        Analog { names: ctx.channels.iter().map(|c| (c.index, c.name.clone())).collect(), meta }
     }
 
     fn name(&self, index: usize) -> String {
@@ -81,6 +94,14 @@ pub fn format_value(
 
 impl Output for Analog {
     fn receive(&mut self, packet: &Packet, out: &mut Vec<u8>) -> Result<()> {
+        if let Packet::Meta(items) = packet {
+            if !self.meta {
+                return Ok(());
+            }
+            for (key, value) in items {
+                out.extend_from_slice(format!("META {key}: {value}\n").as_bytes());
+            }
+        }
         if let Packet::Analog(a) = packet {
             let n = a.channels.len();
             let mut text = String::new();

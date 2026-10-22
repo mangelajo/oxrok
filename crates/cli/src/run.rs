@@ -2,17 +2,11 @@
 
 use crate::args::Args;
 use crate::parse;
+use crate::pipeline::Pipeline;
 use oxrok_core::session::Flow;
 use oxrok_core::util::{parse_sizestring, parse_timestring};
-use oxrok_core::{
-    Device, DeviceClass, Error, Key, Packet, Registry, Result, Session, Value, ValueList,
-};
-use oxrok_formats::output::{self, Options, Output, OutputContext};
-use std::io::Write;
+use oxrok_core::{Device, DeviceClass, Error, Key, Registry, Result, Session, Value, ValueList};
 use std::sync::atomic::Ordering;
-
-const DEFAULT_OUTPUT_NOFILE: &str = "bits:width=64";
-const DEFAULT_OUTPUT_FILE: &str = "srzip";
 
 /// Scans and picks the one device to work with, the way sigrok-cli does:
 /// with several devices found, the demo device is dropped and exactly one
@@ -92,31 +86,6 @@ fn set_limit_time(device: &mut dyn Device, text: &str) -> Result<u64> {
     Err(Error::arg("This device does not support time limits."))
 }
 
-/// Builds the output module named by `-O`, or the default.
-type Outputs = (Box<dyn Output>, Option<Box<dyn Output>>);
-
-fn setup_output(args: &Args, ctx: &OutputContext) -> Result<Outputs> {
-    let spec = args.output_format.clone().unwrap_or_else(|| {
-        if args.output_file.is_some() { DEFAULT_OUTPUT_FILE } else { DEFAULT_OUTPUT_NOFILE }
-            .to_owned()
-    });
-    let parsed = parse::generic_args(&spec, true);
-    let id = parsed.scope.ok_or_else(|| Error::arg("Invalid output format."))?;
-    let module =
-        output::find(&id).ok_or_else(|| Error::Arg(format!("Unknown output module '{id}'.")))?;
-    let options: Options =
-        parsed.items.into_iter().map(|(k, v)| (k, v.unwrap_or_default())).collect();
-    let main = module.instantiate(ctx, &options)?;
-    // Analog data that the main output does not print goes to the
-    // analog output, as in sigrok-cli.
-    let analog = if module.id == "analog" {
-        None
-    } else {
-        output::find("analog").map(|m| m.instantiate(ctx, &Options::new())).transpose()?
-    };
-    Ok((main, analog))
-}
-
 /// A capture run: `--samples`, `--time`, `--frames` or `--continuous`.
 #[allow(clippy::too_many_lines)]
 pub fn session(registry: &Registry, args: &Args) -> Result<()> {
@@ -166,17 +135,8 @@ pub fn session(registry: &Registry, args: &Args) -> Result<()> {
 
     let samplerate = device.get(&Key::Samplerate, None).ok().and_then(|v| v.as_u64());
     let channels = device.channels().to_vec();
-    let ctx = OutputContext { channels: &channels, samplerate };
-    let (mut main, mut analog) = setup_output(args, &ctx)?;
-
-    let mut sink: Box<dyn Write> = match &args.output_file {
-        Some(path) => {
-            Box::new(std::io::BufWriter::new(std::fs::File::create(path).map_err(|e| {
-                Error::Arg(format!("Cannot write to output file '{}': {e}", path.display()))
-            })?))
-        }
-        None => Box::new(std::io::stdout()),
-    };
+    let title = registry.find(device.info().driver).map_or("unknown", |d| d.long_name()).to_owned();
+    let mut pipeline = Pipeline::new(args, &channels, samplerate, &title)?;
 
     let mut session = Session::new();
     session.add_device(device);
@@ -184,45 +144,13 @@ pub fn session(registry: &Registry, args: &Args) -> Result<()> {
     let stop = session.stop_flag();
     let _ = ctrlc::set_handler(move || stop.store(true, Ordering::SeqCst));
 
-    let mut received_logic = 0u64;
-    let mut received_analog = 0u64;
-    let mut triggered = false;
-    let mut buf = Vec::new();
-    let wait_trigger = args.wait_trigger;
-    let result = session.run(|_, packet| {
-        match packet {
-            Packet::Trigger => triggered = true,
-            Packet::Logic(l) => received_logic += l.len() as u64,
-            Packet::Analog(a) => received_analog += a.len() as u64,
-            _ => {}
-        }
-        if wait_trigger && !triggered && matches!(packet, Packet::Logic(_)) {
-            return Flow::Continue;
-        }
-        buf.clear();
-        if main.receive(packet, &mut buf).is_ok() {
-            if buf.is_empty()
-                && let Some(a) = &mut analog
-            {
-                let _ = a.receive(packet, &mut buf);
-            }
-            if !buf.is_empty() && (sink.write_all(&buf).is_err() || sink.flush().is_err()) {
-                return Flow::Stop;
-            }
-        }
-        Flow::Continue
-    });
+    let result =
+        session.run(|_, packet| if pipeline.handle(packet) { Flow::Continue } else { Flow::Stop });
     let devices = session.into_devices();
     for mut d in devices {
         let _ = d.close();
     }
     result?;
-    if limit_samples > 0 {
-        if received_logic > 0 && received_logic < limit_samples {
-            log::warn!("Device only sent {received_logic} samples.");
-        } else if received_analog > 0 && received_analog < limit_samples {
-            log::warn!("Device only sent {received_analog} samples.");
-        }
-    }
+    pipeline.check_limit(limit_samples);
     Ok(())
 }

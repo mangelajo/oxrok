@@ -28,6 +28,14 @@ pub struct Args {
     #[arg(short = 'c', long = "config", value_name = "CONFIG")]
     pub configs: Vec<String>,
 
+    /// Load input from file (- for stdin)
+    #[arg(short = 'i', long = "input-file", value_name = "FILE")]
+    pub input_file: Option<String>,
+
+    /// Input format: module[:option=value]...
+    #[arg(short = 'I', long = "input-format", value_name = "FORMAT")]
+    pub input_format: Option<String>,
+
     /// Save output to file
     #[arg(short = 'o', long = "output-file", value_name = "FILE")]
     pub output_file: Option<PathBuf>,

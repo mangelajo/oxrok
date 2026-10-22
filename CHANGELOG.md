@@ -23,3 +23,12 @@ release may change the library API.
 - Command line: `--scan`, `--show`, `-d`, `-c`, `-C`, `-g`, `-t` with
   several stages, `--samples`, `--time`, `--frames`, `--continuous`,
   `-O`, `-o`, `--get`, `--set`, `-L`, `-V`, `-l`.
+- Session files (`.sr`): the `srzip` output writes them in one pass, and
+  `-i file.sr` reads them, including analog channels. Files round trip
+  with sigrok-cli in both directions.
+- Outputs `vcd`, `csv` and `binary`, byte compatible with sigrok-cli.
+- Inputs `vcd` (scalars, vectors, reals, scopes, `downsample`, `skip`,
+  `compress`, `numchannels`, `samplerate_overwrite`) and `binary`;
+  `-i FILE [-I module:options]` with format detection, `-C` on files,
+  and `-i FILE --show` for a file's properties. `-I module --show` and
+  `-O module --show` describe a module.

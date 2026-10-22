@@ -18,6 +18,7 @@ pub(super) static MODULE: OutputModule = OutputModule {
         default: "192",
     }],
     extensions: &["txt"],
+    analog: false,
     create: |ctx, options| {
         let width = super::option_u32(options, "width", DEFAULT_WIDTH)? as usize;
         Ok(Box::new(Hex::new(ctx, width)))
@@ -72,8 +73,6 @@ impl Output for Hex {
         match packet {
             Packet::Meta(_) => {
                 if let (Some(rate), Some(h)) = (meta_samplerate(packet), &mut self.header) {
-                    let ctx = OutputContext { channels: &[], samplerate: Some(rate) };
-                    let _ = ctx;
                     *h = format!(
                         "oxrok {}\nAcquisition with {}/{} channels at {}\n",
                         oxrok_core::VERSION,
@@ -132,7 +131,7 @@ mod tests {
     #[test]
     fn packs_msb_first_and_pads_the_last_byte() {
         let chans = [Channel::logic(0)];
-        let ctx = OutputContext { channels: &chans, samplerate: None };
+        let ctx = OutputContext { channels: &chans, samplerate: None, ..Default::default() };
         let mut o = Hex::new(&ctx, 192);
         let mut out = Vec::new();
         // 20 samples: 1000 1111 0000 1111 1000

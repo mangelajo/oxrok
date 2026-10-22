@@ -162,6 +162,69 @@ fn gcd(mut a: u64, mut b: u64) -> u64 {
     a
 }
 
+/// A period `p/q` seconds as text with the unit that fits: `1 us`,
+/// `2.5 ms`, `1 s`.
+pub fn period_string(p: u64, q: u64) -> String {
+    let seconds = p as f64 / q.max(1) as f64;
+    let freq = 1.0 / seconds;
+    let (factor, unit) = if freq > 1e9 {
+        (1e12, "ps")
+    } else if freq > 1e6 {
+        (1e9, "ns")
+    } else if freq > 1e3 {
+        (1e6, "us")
+    } else if freq > 1.0 {
+        (1e3, "ms")
+    } else {
+        (1.0, "s")
+    };
+    let v = seconds * factor;
+    if (v - v.trunc()).abs() < f64::from(f32::MIN_POSITIVE) {
+        format!("{v:.0} {unit}")
+    } else {
+        format!("{v:.3} {unit}")
+    }
+}
+
+/// Formats `value` like C's `%.<precision>g`: `precision` significant
+/// digits, trailing zeros removed, exponent form when the exponent is
+/// below -4 or at least `precision`.
+pub fn fmt_g(value: f64, precision: usize) -> String {
+    let p = precision.max(1);
+    if value == 0.0 {
+        return if value.is_sign_negative() { "-0".to_owned() } else { "0".to_owned() };
+    }
+    if !value.is_finite() {
+        return if value.is_nan() {
+            "nan".to_owned()
+        } else if value < 0.0 {
+            "-inf".to_owned()
+        } else {
+            "inf".to_owned()
+        };
+    }
+    // The exponent after rounding to p significant digits.
+    let e_text = format!("{value:.*e}", p - 1);
+    let (mantissa, exp) = e_text.split_once('e').unwrap_or((&e_text, "0"));
+    let exp: i32 = exp.parse().unwrap_or(0);
+    if exp < -4 || exp >= p as i32 {
+        let m = trim_zeros(mantissa);
+        let sign = if exp < 0 { '-' } else { '+' };
+        format!("{m}e{sign}{:02}", exp.abs())
+    } else {
+        let decimals = (p as i32 - 1 - exp).max(0) as usize;
+        trim_zeros(&format!("{value:.decimals$}"))
+    }
+}
+
+fn trim_zeros(s: &str) -> String {
+    if !s.contains('.') {
+        return s.to_owned();
+    }
+    let t = s.trim_end_matches('0');
+    t.trim_end_matches('.').to_owned()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -198,6 +261,28 @@ mod tests {
         assert!(parse_boolstring("yes"));
         assert!(parse_boolstring("On"));
         assert!(!parse_boolstring("no"));
+    }
+
+    #[test]
+    fn formats_periods() {
+        assert_eq!(period_string(1, 1_000_000), "1 us");
+        assert_eq!(period_string(1, 1_000_000_000), "1 ns");
+        assert_eq!(period_string(1, 400), "2.500 ms");
+        assert_eq!(period_string(2, 1), "2 s");
+    }
+
+    #[test]
+    fn formats_like_printf_g() {
+        assert_eq!(fmt_g(-10.0, 6), "-10");
+        assert_eq!(fmt_g(3.090_17, 6), "3.09017");
+        assert_eq!(fmt_g(f64::from(3.090_17f32), 6), "3.09017");
+        assert_eq!(fmt_g(0.0, 6), "0");
+        assert_eq!(fmt_g(1.5e-5, 6), "1.5e-05");
+        assert_eq!(fmt_g(1_234_567.0, 6), "1.23457e+06");
+        assert_eq!(fmt_g(100_000.0, 6), "100000");
+        assert_eq!(fmt_g(0.0001, 6), "0.0001");
+        assert_eq!(fmt_g(-2.25, 16), "-2.25");
+        assert_eq!(fmt_g(f64::from(0.1f32), 16), "0.1000000014901161");
     }
 
     #[test]

@@ -5,8 +5,12 @@ use std::collections::HashMap;
 
 mod analog;
 mod ascii;
+mod binary;
 mod bits;
+mod csv;
 mod hex;
+mod srzip;
+mod vcd;
 
 /// Options given to an output module, e.g. `width=64`.
 pub type Options = HashMap<String, String>;
@@ -18,6 +22,21 @@ pub struct OutputContext<'a> {
     pub channels: &'a [Channel],
     /// The sample rate, if known before the first packet.
     pub samplerate: Option<u64>,
+    /// A title for headers, usually the driver's long name.
+    pub title: String,
+    /// The output file name, for modules that write it themselves.
+    pub filename: Option<String>,
+}
+
+impl Default for OutputContext<'_> {
+    fn default() -> Self {
+        OutputContext {
+            channels: &[],
+            samplerate: None,
+            title: "unknown".to_owned(),
+            filename: None,
+        }
+    }
 }
 
 impl OutputContext<'_> {
@@ -35,6 +54,12 @@ impl OutputContext<'_> {
 pub trait Output {
     /// Handles one packet, appending any text to `out`.
     fn receive(&mut self, packet: &Packet, out: &mut Vec<u8>) -> Result<()>;
+
+    /// True when the module writes the output file itself, so the caller
+    /// must not open it.
+    fn writes_file(&self) -> bool {
+        false
+    }
 }
 
 /// One option an output module accepts.
@@ -62,6 +87,9 @@ pub struct OutputModule {
     pub options: &'static [OutputOption],
     /// File name extensions it suggests.
     pub extensions: &'static [&'static str],
+    /// True when the module prints or stores analog data itself. For the
+    /// others a front end may route analog packets to the `analog` output.
+    pub analog: bool,
     /// Creates a running output.
     pub create: fn(&OutputContext, &Options) -> Result<Box<dyn Output>>,
 }
@@ -78,7 +106,16 @@ impl OutputModule {
     }
 }
 
-static MODULES: [&OutputModule; 4] = [&analog::MODULE, &ascii::MODULE, &bits::MODULE, &hex::MODULE];
+static MODULES: [&OutputModule; 8] = [
+    &analog::MODULE,
+    &ascii::MODULE,
+    &binary::MODULE,
+    &bits::MODULE,
+    &csv::MODULE,
+    &hex::MODULE,
+    &srzip::MODULE,
+    &vcd::MODULE,
+];
 
 /// All output modules, sorted by id.
 pub fn modules() -> &'static [&'static OutputModule] {

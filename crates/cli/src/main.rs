@@ -8,8 +8,10 @@
 #![forbid(unsafe_code)]
 
 mod args;
+mod input;
 mod logger;
 mod parse;
+mod pipeline;
 mod run;
 mod show;
 
@@ -34,10 +36,18 @@ fn main() -> ExitCode {
     } else if args.list_supported {
         show::supported(&registry);
         Ok(())
+    } else if args.input_file.is_some() && args.show {
+        input::show_props(&args)
+    } else if args.input_format.is_some() && args.show {
+        show::input_detail(&args)
+    } else if args.output_format.is_some() && args.show {
+        show::output_detail(&args)
     } else if args.scan {
         show::device_list(&registry, &args)
     } else if args.show {
         show::device_detail(&registry, &args)
+    } else if args.input_file.is_some() {
+        input::run(&args)
     } else if !args.gets.is_empty() {
         run::get_options(&registry, &args)
     } else if args.set {

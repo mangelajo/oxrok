@@ -26,6 +26,7 @@ pub(super) static MODULE: OutputModule = OutputModule {
         },
     ],
     extensions: &["txt"],
+    analog: false,
     create: |ctx, options| {
         let width = super::option_u32(options, "width", DEFAULT_WIDTH)? as usize;
         let charset = options.get("charset").map_or(DEFAULT_CHARSET, String::as_str);
@@ -147,7 +148,7 @@ mod tests {
     #[test]
     fn draws_edges_and_aligns_names() {
         let chans = [Channel::logic(0), Channel::new(10, oxrok_core::ChannelKind::Logic, "D10")];
-        let ctx = OutputContext { channels: &chans, samplerate: None };
+        let ctx = OutputContext { channels: &chans, samplerate: None, ..Default::default() };
         let mut o = Ascii::new(&ctx, 74, DEFAULT_CHARSET);
         let mut out = Vec::new();
         // D0: 0 1 1 0; D10 (bit 10): 1 1 0 0.

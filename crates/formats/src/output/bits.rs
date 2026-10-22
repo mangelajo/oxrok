@@ -17,6 +17,7 @@ pub(super) static MODULE: OutputModule = OutputModule {
         default: "64",
     }],
     extensions: &["txt"],
+    analog: false,
     create: |ctx, options| {
         let width = super::option_u32(options, "width", DEFAULT_WIDTH)? as usize;
         Ok(Box::new(Bits::new(ctx, width)))
@@ -74,9 +75,7 @@ impl Output for Bits {
                 if let Some(rate) = meta_samplerate(packet) {
                     self.samplerate = Some(rate);
                     if let Some(h) = &mut self.header {
-                        let ctx = OutputContext { channels: &[], samplerate: Some(rate) };
-                        *h =
-                            header_with_total(&ctx, self.channels.len(), self.total_channels, rate);
+                        *h = header_with_total(self.channels.len(), self.total_channels, rate);
                     }
                 }
             }
@@ -110,8 +109,7 @@ impl Output for Bits {
     }
 }
 
-fn header_with_total(ctx: &OutputContext, enabled: usize, total: usize, rate: u64) -> String {
-    let _ = ctx;
+fn header_with_total(enabled: usize, total: usize, rate: u64) -> String {
     let mut s =
         format!("oxrok {}\nAcquisition with {enabled}/{total} channels", oxrok_core::VERSION);
     if rate != 0 {
@@ -128,7 +126,7 @@ mod tests {
     use oxrok_core::{Channel, ChannelKind};
 
     fn run(width: usize, unit_size: usize, data: &[u8], channels: &[Channel]) -> String {
-        let ctx = OutputContext { channels, samplerate: Some(1000) };
+        let ctx = OutputContext { channels, samplerate: Some(1000), ..Default::default() };
         let mut o = Bits::new(&ctx, width);
         let mut out = Vec::new();
         o.receive(&Packet::logic(unit_size, data.to_vec()), &mut out).unwrap();

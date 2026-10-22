@@ -30,11 +30,52 @@ pub fn supported(registry: &Registry) {
         println!("  {:<20} {}", d.id(), d.long_name());
     }
     println!("\nSupported input formats:");
+    for m in oxrok_formats::input::modules() {
+        println!("  {:<20} {}", m.id, m.description);
+    }
     println!("\nSupported output formats:");
     for m in oxrok_formats::output::modules() {
         println!("  {:<20} {}", m.id, m.description);
     }
     println!();
+}
+
+/// `-I module --show`.
+pub fn input_detail(args: &Args) -> Result<()> {
+    let spec = args.input_format.as_deref().unwrap_or_default();
+    let id = parse::generic_args(spec, true).scope.unwrap_or_default();
+    let m = oxrok_formats::input::find(&id)
+        .ok_or_else(|| Error::Arg(format!("Unknown input module '{id}'.")))?;
+    println!("ID: {}\nName: {}\nDescription: {}", m.id, m.name, m.description);
+    if !m.extensions.is_empty() {
+        println!("Extensions: {}", m.extensions.join(", "));
+    }
+    if !m.options.is_empty() {
+        println!("Options:");
+        for o in m.options {
+            println!("    {}: {} (default: {})", o.id, o.description, o.default);
+        }
+    }
+    Ok(())
+}
+
+/// `-O module --show`.
+pub fn output_detail(args: &Args) -> Result<()> {
+    let spec = args.output_format.as_deref().unwrap_or_default();
+    let id = parse::generic_args(spec, true).scope.unwrap_or_default();
+    let m = oxrok_formats::output::find(&id)
+        .ok_or_else(|| Error::Arg(format!("Unknown output module '{id}'.")))?;
+    println!("ID: {}\nName: {}\nDescription: {}", m.id, m.name, m.description);
+    if !m.extensions.is_empty() {
+        println!("Extensions: {}", m.extensions.join(", "));
+    }
+    if !m.options.is_empty() {
+        println!("Options:");
+        for o in m.options {
+            println!("    {}: {} (default: {:?})", o.id, o.description, o.default);
+        }
+    }
+    Ok(())
 }
 
 /// One line per device, as `--scan` prints it.
