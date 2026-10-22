@@ -144,6 +144,10 @@ pub trait Transport: Send {
     /// What enumeration said about the device.
     fn info(&self) -> &UsbDeviceInfo;
 
+    /// Selects a configuration. Needed on hosts that leave a freshly
+    /// enumerated device unconfigured until a driver claims it.
+    fn set_configuration(&mut self, configuration: u8) -> Result<()>;
+
     /// Claims an interface. On Linux a kernel driver bound to it is
     /// detached first.
     fn claim_interface(&mut self, interface: u8) -> Result<()>;

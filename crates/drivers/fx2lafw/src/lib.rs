@@ -12,8 +12,9 @@
 #![forbid(unsafe_code)]
 
 use oxrok_core::{
-    Access, Channel, Device, DeviceClass, DeviceInfo, Driver, Error, Key, OptionDesc, Packet,
-    PacketSink, PreTriggerBuffer, Result, SoftTrigger, Trigger, TriggerMatch, Value, ValueList,
+    Access, Channel, ChannelGroup, Device, DeviceClass, DeviceInfo, Driver, Error, Key, OptionDesc,
+    Packet, PacketSink, PreTriggerBuffer, Result, SoftTrigger, Trigger, TriggerMatch, Value,
+    ValueList,
 };
 use oxrok_usb::{ControlRequest, Transport, UsbDeviceInfo, UsbId};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -30,6 +31,7 @@ const REQUIRED_MAJOR: u8 = 1;
 const MAX_SAMPLE_DELAY: u64 = 6 * 256;
 const MAX_8BIT_RATE: u64 = 24_000_000;
 const MAX_16BIT_RATE: u64 = 12_000_000;
+const CONFIGURATION: u8 = 1;
 const INTERFACE: u8 = 0;
 const ENDPOINT_IN: u8 = 0x82;
 const CONTROL_TIMEOUT: Duration = Duration::from_millis(100);
@@ -145,9 +147,9 @@ pub struct Fx2lafwDriver;
 static CLASSES: [DeviceClass; 1] = [DeviceClass::LogicAnalyzer];
 static SCAN_OPTIONS: [Key; 1] = [Key::Conn];
 static DEV_OPTIONS: [OptionDesc; 6] = [
-    OptionDesc::new(Key::Conn, Access::GET),
     OptionDesc::new(Key::Continuous, Access::NONE),
     OptionDesc::new(Key::LimitSamples, Access::GET_SET),
+    OptionDesc::new(Key::Conn, Access::GET),
     OptionDesc::new(Key::Samplerate, Access::GET_SET_LIST),
     OptionDesc::new(Key::TriggerMatch, Access::LIST),
     OptionDesc::new(Key::CaptureRatio, Access::GET_SET),
@@ -212,6 +214,7 @@ pub struct Fx2lafwDevice {
     usb: UsbDeviceInfo,
     profile: &'static Profile,
     channels: Vec<Channel>,
+    groups: Vec<ChannelGroup>,
     settings: Settings,
     trigger: Option<Trigger>,
     pending: Option<Box<dyn Transport>>,
@@ -232,6 +235,7 @@ impl Fx2lafwDevice {
     ) -> Self {
         let count = if profile.wide { 16 } else { 8 };
         let channels = (0..count).map(Channel::logic).collect();
+        let groups = vec![ChannelGroup::new("Logic", (0..count).collect())];
         Fx2lafwDevice {
             info: DeviceInfo {
                 driver: "fx2lafw",
@@ -244,6 +248,7 @@ impl Fx2lafwDevice {
             usb,
             profile,
             channels,
+            groups,
             settings: Settings { samplerate: SAMPLERATES[0], limit_samples: 0, capture_ratio: 0 },
             trigger: None,
             pending: transport,
@@ -266,6 +271,27 @@ impl Fx2lafwDevice {
     fn wide(&self) -> bool {
         self.profile.wide && self.channels.iter().any(|c| c.enabled && c.index >= 8)
     }
+}
+
+/// Opens the device and claims its interface, retrying for a while:
+/// right after renumeration the OS may not have set the configuration
+/// yet, and the interface is not there to claim.
+fn reopen_when_ready(usb: &UsbDeviceInfo) -> Result<Box<dyn Transport>> {
+    let mut last = Error::device("device not ready");
+    for _ in 0..30 {
+        match oxrok_usb::open(usb) {
+            Ok(mut t) => {
+                match t.set_configuration(CONFIGURATION).and_then(|()| t.claim_interface(INTERFACE))
+                {
+                    Ok(()) => return Ok(t),
+                    Err(e) => last = e,
+                }
+            }
+            Err(e) => last = e,
+        }
+        std::thread::sleep(Duration::from_millis(100));
+    }
+    Err(last)
 }
 
 /// Reads the firmware version and chip revision; fails on a version
@@ -307,6 +333,10 @@ impl Device for Fx2lafwDevice {
         &self.channels
     }
 
+    fn channel_groups(&self) -> &[ChannelGroup] {
+        &self.groups
+    }
+
     fn enable_channel(&mut self, pos: usize, enabled: bool) -> Result<()> {
         let c = self.channels.get_mut(pos).ok_or_else(|| Error::arg("no such channel"))?;
         c.enabled = enabled;
@@ -322,6 +352,7 @@ impl Device for Fx2lafwDevice {
     fn options(&self, group: Option<&str>) -> Result<Vec<OptionDesc>> {
         match group {
             None => Ok(DEV_OPTIONS.to_vec()),
+            Some(g) if g.eq_ignore_ascii_case("Logic") => Ok(Vec::new()),
             Some(g) => Err(Error::ChannelGroup(g.to_owned())),
         }
     }
@@ -401,10 +432,12 @@ impl Device for Fx2lafwDevice {
                 )?;
                 self.info.conn = Some(new.conn());
                 self.usb = new;
-                t = oxrok_usb::open(&self.usb)?;
+                // The OS may still be configuring the new device.
+                t = reopen_when_ready(&self.usb)?;
             }
             t
         };
+        t.set_configuration(CONFIGURATION)?;
         t.claim_interface(INTERFACE)?;
         let (major, minor) = check_firmware(t.as_mut())?;
         self.info.version = format!("{major}.{minor}");

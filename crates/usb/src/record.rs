@@ -76,6 +76,8 @@ impl From<Vec<u8>> for Payload {
 /// A call to the transport, without its result.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Call {
+    /// `set_configuration`.
+    SetConfiguration(u8),
     /// `claim_interface`.
     Claim(u8),
     /// `release_interface`.
@@ -175,6 +177,9 @@ impl Fixture {
         s.push('\n');
         for step in &self.steps {
             match &step.call {
+                Call::SetConfiguration(c) => {
+                    let _ = write!(s, "config {c}");
+                }
                 Call::Claim(i) => {
                     let _ = write!(s, "claim {i}");
                 }
@@ -424,6 +429,7 @@ fn parse_call(s: &str) -> std::result::Result<Call, String> {
         })
     };
     Ok(match kind {
+        "config" => Call::SetConfiguration(num(1)? as u8),
         "claim" => Call::Claim(num(1)? as u8),
         "release" => Call::Release(num(1)? as u8),
         "reset" => Call::Reset,
@@ -532,6 +538,11 @@ impl Recorder {
 impl Transport for Recorder {
     fn info(&self) -> &UsbDeviceInfo {
         self.inner.info()
+    }
+
+    fn set_configuration(&mut self, configuration: u8) -> Result<()> {
+        let r = self.inner.set_configuration(configuration);
+        self.log(Call::SetConfiguration(configuration), r, |()| Outcome::Ok)
     }
 
     fn claim_interface(&mut self, interface: u8) -> Result<()> {
@@ -817,6 +828,10 @@ impl ReplayState {
 impl Transport for Replay {
     fn info(&self) -> &UsbDeviceInfo {
         &self.device
+    }
+
+    fn set_configuration(&mut self, configuration: u8) -> Result<()> {
+        self.state().unit(&Call::SetConfiguration(configuration))
     }
 
     fn claim_interface(&mut self, interface: u8) -> Result<()> {

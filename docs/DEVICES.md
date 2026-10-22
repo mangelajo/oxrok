@@ -44,3 +44,9 @@ device does not report the firmware in its strings, then waits up to
 3 s for it to renumerate.
 
 Analog channels (USBee AX) are not supported.
+
+Verified 2026-10-22 on a Saleae Logic clone (`0925:3881`, firmware 1.4):
+upload and renumeration, 60 s at 24 MS/s delivering every byte, and
+`--show` identical to sigrok-cli. Trigger and timing checks against the
+signal generator need a wire from the ESP32 to the analyzer; they are
+not run yet.

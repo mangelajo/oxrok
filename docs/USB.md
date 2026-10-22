@@ -58,8 +58,8 @@ bulk_in 81 4096 -> err timeout
 
 - `device`: what enumeration reported; strings are quoted with `\"`
   and `\\` escapes.
-- `claim N`, `release N`, `reset`, `mps EP`: result `ok`, or the packet
-  size for `mps`.
+- `config N`, `claim N`, `release N`, `reset`, `mps EP`: result `ok`, or
+  the packet size for `mps`.
 - `ctl_out TYPE REQ VALUE INDEX DATA`, `ctl_in TYPE REQ VALUE INDEX LEN`:
   the setup fields in hex, `TYPE` without the direction bit. Results
   are `ok` and the data read.

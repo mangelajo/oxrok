@@ -79,6 +79,14 @@ impl Transport for Rusb {
         &self.info
     }
 
+    fn set_configuration(&mut self, configuration: u8) -> Result<()> {
+        if self.handle.active_configuration().is_ok_and(|c| c == configuration) {
+            return Ok(());
+        }
+        self.claimed.clear();
+        self.handle.set_active_configuration(configuration).map_err(map)
+    }
+
     fn claim_interface(&mut self, interface: u8) -> Result<()> {
         if self.claimed.contains(&interface) {
             return Ok(());

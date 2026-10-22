@@ -150,6 +150,22 @@ impl Transport for Nusb {
         &self.info
     }
 
+    fn set_configuration(&mut self, configuration: u8) -> Result<()> {
+        if self
+            .device
+            .active_configuration()
+            .is_ok_and(|c| c.configuration_value() == configuration)
+        {
+            return Ok(());
+        }
+        self.drop_endpoints();
+        self.interfaces.clear();
+        self.device
+            .set_configuration(configuration)
+            .wait()
+            .map_err(|e| map(&e, &format!("set configuration {configuration}")))
+    }
+
     fn claim_interface(&mut self, interface: u8) -> Result<()> {
         if self.interfaces.contains_key(&interface) {
             return Ok(());

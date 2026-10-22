@@ -9,6 +9,7 @@ use oxrok_usb::record::Replay;
 
 const SESSION: &str = "# oxrok usb fixture 1\n\
     device vid=0925 pid=3881 version=0001 bus=1 addr=4 manufacturer=\"sigrok\" product=\"fx2lafw\"\n\
+    config 1 -> ok\n\
     claim 0 -> ok\n\
     ctl_in 40 b0 0000 0000 2 -> 0104\n\
     ctl_in 40 b2 0000 0000 1 -> 01\n\
@@ -90,4 +91,35 @@ fn a_wrong_rate_fails_before_the_device_is_touched() {
     let (tx, _rx) = std::sync::mpsc::sync_channel(4);
     let e = dev.start(oxrok_core::PacketSink::new(tx, 0)).unwrap_err().to_string();
     assert!(e.contains("maximum sample rate"), "{e}");
+}
+
+/// A session recorded on a Saleae Logic clone (firmware 1.4) with
+/// `OXROK_USB_RECORD`, 2026-10-22, inputs floating high.
+#[test]
+fn recorded_capture_replays() {
+    let replay = Replay::from_text(include_str!("fixtures/capture-1m.txt")).unwrap();
+    let mut dev = Fx2lafwDevice::from_transport(Box::new(replay)).unwrap();
+    dev.open().unwrap();
+    dev.set(&Key::Samplerate, &Value::U64(1_000_000), None).unwrap();
+    dev.set(&Key::LimitSamples, &Value::U64(2000), None).unwrap();
+    let mut session = Session::new();
+    session.add_device(Box::new(dev));
+    let mut data = Vec::new();
+    session
+        .run(|_, p| {
+            if let Packet::Logic(l) = p {
+                data.extend_from_slice(&l.data);
+                if data.len() >= 2000 {
+                    return Flow::Stop;
+                }
+            }
+            Flow::Continue
+        })
+        .unwrap();
+    assert_eq!(data.len(), 2000);
+    assert!(data.iter().all(|&b| b == 0xff));
+    // The bits output printed during the recording agrees.
+    let bits = include_str!("fixtures/capture-1m.bits");
+    let d0 = bits.lines().find(|l| l.starts_with("D0:")).unwrap();
+    assert!(d0.chars().skip(3).all(|c| c == '1' || c == ' '), "{d0}");
 }
