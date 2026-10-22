@@ -233,14 +233,22 @@ pub fn find_devices(ids: &[UsbId]) -> Result<Vec<UsbDeviceInfo>> {
 }
 
 /// Opens a device found by [`list_devices`].
+///
+/// With `OXROK_USB_RECORD=FILE` in the environment the session is
+/// recorded and written to `FILE` when the transport is dropped. With
+/// several devices the file name gets `.N` appended from the second one.
 pub fn open(info: &UsbDeviceInfo) -> Result<Box<dyn Transport>> {
-    match &info.handle {
+    let transport = match &info.handle {
         #[cfg(feature = "nusb")]
-        Handle::Nusb(_) => nusb_backend::open(info),
+        Handle::Nusb(_) => nusb_backend::open(info)?,
         #[cfg(feature = "libusb")]
-        Handle::Rusb { .. } => rusb_backend::open(info),
-        Handle::None => Err(Error::not_supported("this device cannot be opened")),
+        Handle::Rusb { .. } => rusb_backend::open(info)?,
+        Handle::None => return Err(Error::not_supported("this device cannot be opened")),
+    };
+    if let Ok(path) = std::env::var("OXROK_USB_RECORD") {
+        return Ok(Box::new(record::Recorder::to_file(transport, path)));
     }
+    Ok(transport)
 }
 
 #[cfg(test)]

@@ -19,6 +19,7 @@ libusb = ["dep:rusb"]
 [dependencies]
 oxrok-core.workspace = true
 log.workspace = true
+sha2 = "0.10"
 nusb = { version = "0.2.8", optional = true }
 rusb = { version = "0.9.4", optional = true, features = ["vendored"] }
 

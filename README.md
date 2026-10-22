@@ -12,10 +12,10 @@ carry over.
 Early. The workspace builds on Linux, macOS and Windows with a demo
 device, a sigrok-cli style command line, the `bits`, `hex`, `ascii`,
 `analog`, `csv`, `vcd`, `binary` and `srzip` outputs, and `.sr`, VCD and
-binary inputs, and a USB transport (nusb or libusb) with record and
-replay plus the FTDI vendor protocol, verified on macOS with a LogicPort.
-Hardware drivers (Intronix LogicPort, fx2lafw) come next; see
-`docs/ROADMAP.md`.
+binary inputs, a USB transport (nusb or libusb) with record and replay,
+and the first hardware driver: the Intronix LogicPort LA1034, checked
+against the libsigrok driver byte for byte and against a signal generator
+on the bench. fx2lafw comes next; see `docs/ROADMAP.md`.
 
 ```sh
 cargo install --path crates/cli
@@ -24,6 +24,7 @@ oxrok -d demo:logic_channels=4 -g Logic -c pattern=walking-one --samples 20 -O b
 oxrok -d demo --show
 oxrok -d demo --samples 1k -o capture.sr      # a session file PulseView opens
 oxrok -i capture.sr -O csv
+oxrok -d intronix-logicport -c samplerate=100M -t D0=r --samples 2k -O vcd -o cap.vcd
 ```
 
 The output after the first header line matches sigrok-cli byte for byte
@@ -38,6 +39,8 @@ for the same command, which is how the test suite checks it.
 | `oxrok-usb` | the `Transport` trait, nusb and libusb backends, record and replay fixtures |
 | `oxrok-ftdi` | FT232/FT245 vendor requests and FIFO reads over a transport |
 | `oxrok-driver-demo` | a logic and analog pattern generator with no hardware |
+| `oxrok-driver-logicport` | Intronix LogicPort LA1034, see `docs/LOGICPORT.md` and `docs/DEVICES.md` |
+| `oxrok-hil` | hardware in the loop checks, not published |
 | `oxrok` | the command line tool |
 
 ## Compatibility with sigrok

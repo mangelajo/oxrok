@@ -42,7 +42,7 @@ claim 0 -> ok
 mps 81 -> 64
 ctl_out 40 09 0004 0000 - -> ok
 ctl_in 40 0a 0000 0000 1 -> 04
-bulk_out 02 00*4096 -> 4096
+bulk_out 02 00{4096} -> 4096
 bulk_in 81 4096 -> 3160aabb
 bulk_in 81 4096 -> err timeout
 ```
@@ -56,12 +56,25 @@ bulk_in 81 4096 -> err timeout
   are `ok` and the data read.
 - `bulk_out EP DATA`, `bulk_in EP LEN`: results are the byte count and
   the data read.
-- Data is hex pairs; `-` is empty and `xx*N` repeats a byte, so a zero
-  flood stays one short token.
+- Data is hex pairs; `-` is empty and `xx{N}` repeats a byte, so a zero
+  flood stays one short token. Data sent to the device that is longer
+  than 1 KiB is recorded as `@LEN:SHA256` and compared by digest, so a
+  1 MB bitstream is one line.
 - Errors are `err KIND ["message"]` with kind `timeout`, `busy`,
   `device`, `io` or `unsupported`.
 
-Timeouts are not recorded; a replay answers at once.
+Timeouts are not recorded; a replay answers at once. Polling loops run
+on time, so a replay may poll more or fewer times than the recording:
+a read identical to the one just answered is answered again, and
+leftover identical reads in the recording are skipped.
+
+`OXROK_USB_RECORD=FILE` makes `oxrok_usb::open` record every session
+and write the fixture when the device is closed, with any program
+that uses the drivers:
+
+```sh
+OXROK_USB_RECORD=capture.txt oxrok -d intronix-logicport -c samplerate=10M --samples 64 -O bits
+```
 
 To record, wrap the transport before handing it to the driver:
 

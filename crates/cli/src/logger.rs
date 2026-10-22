@@ -32,7 +32,10 @@ impl Log for Stderr {
         if record.level() <= Level::Warn {
             WARNINGS.fetch_add(1, Ordering::Relaxed);
         }
-        if self.enabled(record.metadata()) {
+        // Up to -l 4 only oxrok's own messages are shown; -l 5 shows
+        // the libraries' too.
+        let ours = record.target().starts_with("oxrok");
+        if self.enabled(record.metadata()) && (ours || filter() >= LevelFilter::Trace) {
             let level = match record.level() {
                 Level::Error => "err",
                 Level::Warn => "warn",

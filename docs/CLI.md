@@ -39,4 +39,4 @@ Deliberate, and kept small:
 - `-T` (transform modules), `--list-supported-wiki`.
 - The `csv` input and the other long tail input modules (ChronoVu LA8,
   STF, Trace32, ISF, WAV, LogicPort .lpf).
-- Hardware drivers: phases 3 and 4 of the roadmap.
+- fx2lafw and the other hardware drivers: phase 4 of the roadmap.

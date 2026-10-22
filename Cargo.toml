@@ -6,7 +6,9 @@ members = [
     "crates/usb",
     "crates/ftdi",
     "crates/drivers/demo",
+    "crates/drivers/logicport",
     "crates/cli",
+    "crates/hil",
 ]
 
 [workspace.package]
@@ -23,6 +25,7 @@ oxrok-formats = { path = "crates/formats", version = "0.1.0" }
 oxrok-usb = { path = "crates/usb", version = "0.1.0", default-features = false }
 oxrok-ftdi = { path = "crates/ftdi", version = "0.1.0" }
 oxrok-driver-demo = { path = "crates/drivers/demo", version = "0.1.0" }
+oxrok-driver-logicport = { path = "crates/drivers/logicport", version = "0.1.0" }
 log = "0.4"
 thiserror = "2"
 clap = { version = "4", features = ["derive"] }

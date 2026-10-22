@@ -1,0 +1,22 @@
+[package]
+name = "oxrok-driver-logicport"
+description = "Intronix LogicPort LA1034 logic analyzer driver for oxrok"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+oxrok-core.workspace = true
+oxrok-usb.workspace = true
+oxrok-ftdi.workspace = true
+log.workspace = true
+
+[dev-dependencies]
+log.workspace = true
+oxrok-usb = { workspace = true, features = ["nusb"] }
+
+[lints]
+workspace = true

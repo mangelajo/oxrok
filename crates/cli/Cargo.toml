@@ -10,6 +10,11 @@ authors.workspace = true
 keywords = ["logic-analyzer", "sigrok", "cli", "oscilloscope"]
 categories = ["command-line-utilities", "hardware-support"]
 
+[features]
+default = []
+# Add the libusb backend; OXROK_USB_BACKEND=libusb selects it.
+libusb = ["oxrok-usb/libusb"]
+
 [lints]
 workspace = true
 
@@ -21,6 +26,8 @@ path = "src/main.rs"
 oxrok-core.workspace = true
 oxrok-formats.workspace = true
 oxrok-driver-demo.workspace = true
+oxrok-driver-logicport.workspace = true
+oxrok-usb = { workspace = true, features = ["nusb"] }
 clap.workspace = true
 log.workspace = true
 ctrlc = "3"

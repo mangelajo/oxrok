@@ -24,7 +24,7 @@ const DEMO8: &str = "demo:logic_channels=8:analog_channels=0";
 
 #[test]
 fn scan_lists_the_demo_device() {
-    let (out, _, ok) = oxrok(&["--scan"]);
+    let (out, _, ok) = oxrok(&["-d", "demo", "--scan"]);
     assert!(ok);
     assert_eq!(
         out,

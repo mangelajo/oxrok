@@ -23,6 +23,7 @@ use std::process::ExitCode;
 fn registry() -> Registry {
     let mut r = Registry::new();
     r.register(Box::new(oxrok_driver_demo::DemoDriver));
+    r.register(Box::new(oxrok_driver_logicport::LogicPortDriver));
     r
 }
 

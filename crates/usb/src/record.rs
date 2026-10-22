@@ -15,15 +15,63 @@
 //!
 //! Control requests are `bmRequestType bRequest wValue wIndex` in hex,
 //! then the data (`-` when empty) or the length. Data is hex pairs; a
-//! run of the same byte may be written `00*4096`. Results are `ok`, a
+//! run of the same byte may be written `00{4096}`, and data sent to the
+//! device that is longer than [`HASH_ABOVE`] bytes is recorded as
+//! `@LEN:SHA256` and compared by digest on replay. Results are `ok`, a
 //! number, hex data, or `err <kind> ["message"]` with kind `timeout`,
 //! `busy`, `device`, `io` or `unsupported`.
 
 use crate::{ControlRequest, Result, Transport, UsbDeviceInfo};
 use oxrok_core::Error;
+use sha2::{Digest as _, Sha256};
 use std::fmt::Write as _;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
+
+/// Data sent to the device above this size is recorded as a digest.
+pub const HASH_ABOVE: usize = 1024;
+
+/// Data sent to the device: the bytes, or their length and SHA-256.
+#[derive(Clone, Debug, Eq)]
+pub enum Payload {
+    /// The bytes themselves.
+    Bytes(Vec<u8>),
+    /// Length and SHA-256 of the bytes.
+    Digest(usize, [u8; 32]),
+}
+
+impl Payload {
+    /// The payload of `data`, hashed when longer than [`HASH_ABOVE`].
+    pub fn of(data: &[u8]) -> Self {
+        if data.len() > HASH_ABOVE {
+            Payload::Digest(data.len(), Sha256::digest(data).into())
+        } else {
+            Payload::Bytes(data.to_vec())
+        }
+    }
+
+    fn digest(&self) -> (usize, [u8; 32]) {
+        match self {
+            Payload::Bytes(b) => (b.len(), Sha256::digest(b).into()),
+            Payload::Digest(n, d) => (*n, *d),
+        }
+    }
+}
+
+impl PartialEq for Payload {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Payload::Bytes(a), Payload::Bytes(b)) => a == b,
+            _ => self.digest() == other.digest(),
+        }
+    }
+}
+
+impl From<Vec<u8>> for Payload {
+    fn from(v: Vec<u8>) -> Self {
+        Payload::Bytes(v)
+    }
+}
 
 /// A call to the transport, without its result.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -37,11 +85,11 @@ pub enum Call {
     /// `max_packet_size`.
     MaxPacketSize(u8),
     /// `control_out`.
-    ControlOut(ControlRequest, Vec<u8>),
+    ControlOut(ControlRequest, Payload),
     /// `control_in` with the requested length.
     ControlIn(ControlRequest, usize),
     /// `bulk_out`.
-    BulkOut(u8, Vec<u8>),
+    BulkOut(u8, Payload),
     /// `bulk_in` with the requested length.
     BulkIn(u8, usize),
 }
@@ -145,7 +193,7 @@ impl Fixture {
                         r.request,
                         r.value,
                         r.index,
-                        hex(data)
+                        payload(data)
                     );
                 }
                 Call::ControlIn(r, len) => {
@@ -156,7 +204,7 @@ impl Fixture {
                     );
                 }
                 Call::BulkOut(ep, data) => {
-                    let _ = write!(s, "bulk_out {ep:02x} {}", hex(data));
+                    let _ = write!(s, "bulk_out {ep:02x} {}", payload(data));
                 }
                 Call::BulkIn(ep, len) => {
                     let _ = write!(s, "bulk_in {ep:02x} {len}");
@@ -276,7 +324,31 @@ fn parse_device(s: &str) -> std::result::Result<UsbDeviceInfo, String> {
     Ok(d)
 }
 
-/// Hex pairs with `xx*N` runs.
+fn payload(p: &Payload) -> String {
+    match p {
+        Payload::Bytes(b) => hex(b),
+        Payload::Digest(n, d) => {
+            let mut s = format!("@{n}:");
+            for b in d {
+                let _ = write!(s, "{b:02x}");
+            }
+            s
+        }
+    }
+}
+
+fn parse_payload(s: &str) -> std::result::Result<Payload, String> {
+    if let Some(rest) = s.strip_prefix('@') {
+        let (n, d) = rest.split_once(':').ok_or("expected @LEN:SHA256")?;
+        let n: usize = n.parse().map_err(|_| "bad digest length")?;
+        let d = unhex(d)?;
+        let d: [u8; 32] = d.try_into().map_err(|_| "digest must be 32 bytes")?;
+        return Ok(Payload::Digest(n, d));
+    }
+    Ok(Payload::Bytes(unhex(s)?))
+}
+
+/// Hex pairs with `xx{N}` runs.
 pub fn hex(data: &[u8]) -> String {
     if data.is_empty() {
         return "-".into();
@@ -290,7 +362,7 @@ pub fn hex(data: &[u8]) -> String {
             run += 1;
         }
         if run >= 4 {
-            let _ = write!(s, "{b:02x}*{run}");
+            let _ = write!(s, "{b:02x}{{{run}}}");
             i += run;
         } else {
             let _ = write!(s, "{b:02x}");
@@ -314,12 +386,11 @@ pub fn unhex(s: &str) -> std::result::Result<Vec<u8>, String> {
         }
         let b = u8::from_str_radix(&s[i..i + 2], 16).map_err(|_| "bad hex")?;
         i += 2;
-        if i < bytes.len() && bytes[i] == b'*' {
-            let end =
-                s[i + 1..].find(|c: char| !c.is_ascii_digit()).map_or(bytes.len(), |e| i + 1 + e);
+        if i < bytes.len() && bytes[i] == b'{' {
+            let end = s[i..].find('}').map(|e| i + e).ok_or("unterminated run length")?;
             let n: usize = s[i + 1..end].parse().map_err(|_| "bad run length")?;
             out.extend(std::iter::repeat_n(b, n));
-            i = end;
+            i = end + 1;
         } else {
             out.push(b);
         }
@@ -357,9 +428,9 @@ fn parse_call(s: &str) -> std::result::Result<Call, String> {
         "release" => Call::Release(num(1)? as u8),
         "reset" => Call::Reset,
         "mps" => Call::MaxPacketSize(h8(1)?),
-        "ctl_out" => Call::ControlOut(request()?, unhex(field(5)?)?),
+        "ctl_out" => Call::ControlOut(request()?, parse_payload(field(5)?)?),
         "ctl_in" => Call::ControlIn(request()?, num(5)?),
-        "bulk_out" => Call::BulkOut(h8(1)?, unhex(field(2)?)?),
+        "bulk_out" => Call::BulkOut(h8(1)?, parse_payload(field(2)?)?),
         "bulk_in" => Call::BulkIn(h8(1)?, num(2)?),
         other => return Err(format!("unknown call {other}")),
     })
@@ -385,6 +456,19 @@ fn parse_outcome(s: &str, call: &Call) -> std::result::Result<Outcome, String> {
 pub struct Recorder {
     inner: Box<dyn Transport>,
     fixture: Arc<Mutex<Fixture>>,
+    file: Option<String>,
+}
+
+impl Drop for Recorder {
+    fn drop(&mut self) {
+        if let Some(path) = &self.file {
+            let text = self.fixture().to_text();
+            match std::fs::write(path, text) {
+                Ok(()) => log::info!("USB session recorded to {path}"),
+                Err(e) => log::error!("cannot write the USB recording {path}: {e}"),
+            }
+        }
+    }
 }
 
 /// A view of a [`Recorder`]'s fixture that outlives the recorder being
@@ -403,7 +487,18 @@ impl Recorder {
     /// Wraps `inner`.
     pub fn new(inner: Box<dyn Transport>) -> Self {
         let device = inner.info().clone();
-        Recorder { inner, fixture: Arc::new(Mutex::new(Fixture { device, steps: Vec::new() })) }
+        Recorder {
+            inner,
+            fixture: Arc::new(Mutex::new(Fixture { device, steps: Vec::new() })),
+            file: None,
+        }
+    }
+
+    /// Wraps `inner` and writes the fixture to `path` when dropped.
+    pub fn to_file(inner: Box<dyn Transport>, path: impl Into<String>) -> Self {
+        let mut r = Self::new(inner);
+        r.file = Some(path.into());
+        r
     }
 
     /// Wraps `inner` and returns a handle to read the recording later.
@@ -418,10 +513,10 @@ impl Recorder {
         self.fixture.lock().expect("recording lock").clone()
     }
 
-    /// Stops recording and returns the fixture and the transport.
-    pub fn finish(self) -> (Fixture, Box<dyn Transport>) {
-        let fixture = self.fixture();
-        (fixture, self.inner)
+    /// Stops recording and returns the fixture. The transport is
+    /// dropped.
+    pub fn finish(self) -> Fixture {
+        self.fixture()
     }
 
     fn log<T>(&mut self, call: Call, r: Result<T>, ok: impl FnOnce(&T) -> Outcome) -> Result<T> {
@@ -461,7 +556,7 @@ impl Transport for Recorder {
 
     fn control_out(&mut self, req: ControlRequest, data: &[u8], timeout: Duration) -> Result<()> {
         let r = self.inner.control_out(req, data, timeout);
-        self.log(Call::ControlOut(req, data.to_vec()), r, |()| Outcome::Ok)
+        self.log(Call::ControlOut(req, Payload::of(data)), r, |()| Outcome::Ok)
     }
 
     fn control_in(
@@ -476,7 +571,7 @@ impl Transport for Recorder {
 
     fn bulk_out(&mut self, endpoint: u8, data: &[u8], timeout: Duration) -> Result<usize> {
         let r = self.inner.bulk_out(endpoint, data, timeout);
-        self.log(Call::BulkOut(endpoint, data.to_vec()), r, |n| Outcome::Count(*n))
+        self.log(Call::BulkOut(endpoint, Payload::of(data)), r, |n| Outcome::Count(*n))
     }
 
     fn bulk_in(&mut self, endpoint: u8, len: usize, timeout: Duration) -> Result<Vec<u8>> {
@@ -485,17 +580,31 @@ impl Transport for Recorder {
     }
 }
 
+fn is_read(call: &Call) -> bool {
+    matches!(call, Call::ControlIn(..) | Call::BulkIn(..))
+}
+
+/// A command a device answers through reads; claims and resets are not.
+fn is_command(call: &Call) -> bool {
+    matches!(call, Call::ControlOut(..) | Call::BulkOut(..))
+}
+
 /// A transport that answers from a [`Fixture`] and fails on any call
-/// that differs from the recording.
+/// that differs from the recording, except for repeated polls (see
+/// [`Replay::finish`] and the rules in the source).
 pub struct Replay {
     fixture: Fixture,
     pos: usize,
+    /// The last answered command (a non-read step).
+    last_cmd: Option<usize>,
+    /// While a command is repeated: the next recorded response.
+    repeat: Option<usize>,
 }
 
 impl Replay {
     /// Replays `fixture` from the start.
     pub fn new(fixture: Fixture) -> Self {
-        Replay { fixture, pos: 0 }
+        Replay { fixture, pos: 0, last_cmd: None, repeat: None }
     }
 
     /// Replays fixture text.
@@ -508,32 +617,103 @@ impl Replay {
         self.fixture.steps.len() - self.pos
     }
 
-    /// Fails when steps remain, for the end of a test.
+    /// Fails when steps remain, for the end of a test. Leftover
+    /// repeats of the last read or of the last command group do not
+    /// count.
     pub fn finish(&self) -> Result<()> {
-        match self.remaining() {
-            0 => Ok(()),
-            n => Err(Error::Device(format!(
-                "replay: {n} recorded steps were not replayed, next is {:?}",
-                self.fixture.steps[self.pos].call
-            ))),
+        let steps = &self.fixture.steps;
+        let last = self.pos.checked_sub(1).map(|i| &steps[i].call);
+        let cmd = self.last_cmd.map(|i| &steps[i].call);
+        let mut i = self.pos;
+        while i < steps.len() {
+            let c = &steps[i].call;
+            if is_read(c) && Some(c) == last {
+                i += 1;
+            } else if Some(c) == cmd {
+                i += 1;
+                while i < steps.len() && is_read(&steps[i].call) {
+                    i += 1;
+                }
+            } else {
+                return Err(Error::Device(format!(
+                    "replay: {} recorded steps were not replayed, next is {:?}",
+                    steps.len() - i,
+                    c
+                )));
+            }
         }
+        Ok(())
     }
 
+    /// Answers `call` from the recording.
+    ///
+    /// Polling loops run on time, so a replay may poll more or fewer
+    /// times than the recording did. A poll is either a read repeated
+    /// on its own (a pin or status request) or a command followed by
+    /// its reads (a FIFO protocol). When the call does not match the
+    /// next step: a repeat of the last read is answered again; a repeat
+    /// of the last command re-enters its recorded responses; and when
+    /// the recording repeats the last read or command group while the
+    /// replay moved on, those steps are skipped.
     fn step(&mut self, call: &Call) -> Result<Outcome> {
-        let Some(step) = self.fixture.steps.get(self.pos) else {
-            return Err(Error::Device(format!(
-                "replay: past the end of the recording at {call:?}"
-            )));
-        };
-        if step.call != *call {
+        if let Some(r) = self.repeat {
+            if is_read(call) && r < self.pos && self.fixture.steps[r].call == *call {
+                self.repeat = Some(r + 1);
+                return Ok(self.fixture.steps[r].outcome.clone());
+            }
+            self.repeat = None;
+        }
+        loop {
+            let steps = &self.fixture.steps;
+            let last = self.pos.checked_sub(1).map(|i| &steps[i]);
+            if let Some(step) = steps.get(self.pos)
+                && step.call == *call
+            {
+                if is_command(call) {
+                    self.last_cmd = Some(self.pos);
+                }
+                self.pos += 1;
+                return Ok(step.outcome.clone());
+            }
+            if let Some(l) = last
+                && is_read(call)
+                && l.call == *call
+            {
+                return Ok(l.outcome.clone());
+            }
+            if let Some(lc) = self.last_cmd
+                && steps[lc].call == *call
+            {
+                self.repeat = Some(lc + 1);
+                return Ok(steps[lc].outcome.clone());
+            }
+            let Some(step) = steps.get(self.pos) else {
+                return Err(Error::Device(format!(
+                    "replay: past the end of the recording at {call:?}"
+                )));
+            };
+            if let Some(l) = last
+                && is_read(&step.call)
+                && step.call == l.call
+            {
+                self.pos += 1;
+                continue;
+            }
+            if let Some(lc) = self.last_cmd
+                && step.call == steps[lc].call
+            {
+                self.pos += 1;
+                while self.pos < steps.len() && is_read(&steps[self.pos].call) {
+                    self.pos += 1;
+                }
+                continue;
+            }
             return Err(Error::Device(format!(
                 "replay: step {} expected {:?}, got {call:?}",
                 self.pos + 1,
                 step.call
             )));
         }
-        self.pos += 1;
-        Ok(step.outcome.clone())
     }
 
     fn unit(&mut self, call: &Call) -> Result<()> {
@@ -583,7 +763,7 @@ impl Transport for Replay {
     }
 
     fn control_out(&mut self, req: ControlRequest, data: &[u8], _timeout: Duration) -> Result<()> {
-        self.unit(&Call::ControlOut(req, data.to_vec()))
+        self.unit(&Call::ControlOut(req, data.to_vec().into()))
     }
 
     fn control_in(
@@ -596,7 +776,7 @@ impl Transport for Replay {
     }
 
     fn bulk_out(&mut self, endpoint: u8, data: &[u8], _timeout: Duration) -> Result<usize> {
-        self.count(&Call::BulkOut(endpoint, data.to_vec()))
+        self.count(&Call::BulkOut(endpoint, data.to_vec().into()))
     }
 
     fn bulk_in(&mut self, endpoint: u8, len: usize, _timeout: Duration) -> Result<Vec<u8>> {
@@ -614,7 +794,7 @@ mod tests {
         mps 81 -> 64\n\
         ctl_out 40 00 0000 0001 - -> ok\n\
         ctl_in 40 0c 0000 0001 1 -> 18\n\
-        bulk_out 02 00*5aa -> 6\n\
+        bulk_out 02 00{5}aa -> 6\n\
         bulk_in 81 64 -> 3160\n\
         bulk_in 81 64 -> err timeout\n\
         reset -> err device \"device disconnected\"\n";
@@ -622,9 +802,11 @@ mod tests {
     #[test]
     fn hex_runs() {
         assert_eq!(hex(&[]), "-");
-        assert_eq!(hex(&[0, 0, 0, 0, 0xaa]), "00*4aa");
+        assert_eq!(hex(&[0, 0, 0, 0, 0xaa]), "00{4}aa");
         assert_eq!(hex(&[0, 0, 0, 0xaa]), "000000aa");
-        assert_eq!(unhex("00*4aa").unwrap(), [0, 0, 0, 0, 0xaa]);
+        assert_eq!(unhex("00{4}aa").unwrap(), [0, 0, 0, 0, 0xaa]);
+        assert_eq!(unhex("00{59}316000{62}").unwrap().len(), 59 + 2 + 62);
+        assert!(unhex("00{4").is_err());
         assert_eq!(unhex("-").unwrap(), Vec::<u8>::new());
         assert!(unhex("0").is_err());
         assert!(unhex("zz").is_err());
@@ -636,7 +818,7 @@ mod tests {
         assert_eq!(f.device.product.as_deref(), Some("LogicPort \"LA\""));
         assert_eq!(f.device.conn(), "2.7");
         assert_eq!(f.steps.len(), 8);
-        assert_eq!(f.steps[4].call, Call::BulkOut(2, vec![0, 0, 0, 0, 0, 0xaa]));
+        assert_eq!(f.steps[4].call, Call::BulkOut(2, vec![0, 0, 0, 0, 0, 0xaa].into()));
         assert_eq!(f.to_text(), TEXT);
         assert_eq!(Fixture::parse(&f.to_text()).unwrap(), f);
     }
@@ -661,6 +843,66 @@ mod tests {
     }
 
     #[test]
+    fn replay_tolerates_polling_loops() {
+        let text = "# oxrok usb fixture 1\n\
+            device vid=0403 pid=dc48\n\
+            ctl_in 40 0c 0000 0000 1 -> 00\n\
+            ctl_in 40 0c 0000 0000 1 -> 00\n\
+            ctl_in 40 0c 0000 0000 1 -> 10\n\
+            ctl_in 40 0c 0000 0000 1 -> 10\n\
+            reset -> ok\n";
+        let t = Duration::ZERO;
+        let pins = ControlRequest::vendor(0x0c, 0, 0);
+        // Fewer polls than recorded: the leftover identical polls are skipped.
+        let mut r = Replay::from_text(text).unwrap();
+        assert_eq!(r.control_in(pins, 1, t).unwrap(), [0]);
+        assert_eq!(r.control_in(pins, 1, t).unwrap(), [0]);
+        assert_eq!(r.control_in(pins, 1, t).unwrap(), [0x10]);
+        r.reset().unwrap();
+        r.finish().unwrap();
+        // More polls than recorded: the last answer repeats.
+        let mut r = Replay::from_text(text).unwrap();
+        for _ in 0..4 {
+            r.control_in(pins, 1, t).unwrap();
+        }
+        assert_eq!(r.control_in(pins, 1, t).unwrap(), [0x10]);
+        assert_eq!(r.control_in(pins, 1, t).unwrap(), [0x10]);
+        r.reset().unwrap();
+        r.finish().unwrap();
+        // Past the end, a repeated poll still answers; a new call fails.
+        assert!(r.reset().is_err());
+        // A command with its responses, polled more and fewer times.
+        let text = "# oxrok usb fixture 1\n\
+            device vid=0403 pid=dc48\n\
+            bulk_out 02 c2050000 -> 4\n\
+            bulk_in 81 64 -> 01\n\
+            bulk_out 02 c2050000 -> 4\n\
+            bulk_in 81 64 -> 02\n\
+            bulk_out 02 c2050000 -> 4\n\
+            bulk_in 81 64 -> 02\n\
+            bulk_out 02 c3000000 -> 4\n\
+            bulk_in 81 64 -> 03\n";
+        let poll = |r: &mut Replay| {
+            r.bulk_out(2, &[0xc2, 5, 0, 0], t).unwrap();
+            r.bulk_in(0x81, 64, t).unwrap()
+        };
+        let mut r = Replay::from_text(text).unwrap();
+        assert_eq!(poll(&mut r), [1]);
+        assert_eq!(poll(&mut r), [2]);
+        assert_eq!(poll(&mut r), [2]);
+        assert_eq!(poll(&mut r), [2]);
+        assert_eq!(poll(&mut r), [2]);
+        r.bulk_out(2, &[0xc3, 0, 0, 0], t).unwrap();
+        assert_eq!(r.bulk_in(0x81, 64, t).unwrap(), [3]);
+        r.finish().unwrap();
+        let mut r = Replay::from_text(text).unwrap();
+        assert_eq!(poll(&mut r), [1]);
+        r.bulk_out(2, &[0xc3, 0, 0, 0], t).unwrap();
+        assert_eq!(r.bulk_in(0x81, 64, t).unwrap(), [3]);
+        r.finish().unwrap();
+    }
+
+    #[test]
     fn replay_rejects_a_different_call() {
         let mut r = Replay::from_text(TEXT).unwrap();
         let e = r.claim_interface(1).unwrap_err().to_string();
@@ -675,10 +917,41 @@ mod tests {
         rec.claim_interface(0).unwrap();
         assert_eq!(rec.max_packet_size(0x81).unwrap(), 64);
         rec.control_out(ControlRequest::vendor(0, 0, 1), &[], t).unwrap();
-        let (f, _) = rec.finish();
+        let f = rec.finish();
         assert_eq!(f.steps.len(), 3);
         assert_eq!(f.steps[1].outcome, Outcome::Count(64));
         assert!(f.to_text().starts_with(MAGIC));
+    }
+
+    #[test]
+    fn large_payloads_are_hashed() {
+        let big = vec![0x5a; HASH_ABOVE + 1];
+        let p = Payload::of(&big);
+        assert!(matches!(p, Payload::Digest(n, _) if n == HASH_ABOVE + 1));
+        assert_eq!(p, Payload::Bytes(big.clone()));
+        assert_ne!(p, Payload::Bytes(vec![0x5a; HASH_ABOVE]));
+        let text = format!(
+            "# oxrok usb fixture 1\ndevice vid=0403 pid=dc48 version=0000 bus=0 addr=0\nbulk_out 02 {} -> {}\n",
+            payload(&p),
+            big.len()
+        );
+        let f = Fixture::parse(&text).unwrap();
+        assert_eq!(f.to_text(), text);
+        let mut r = Replay::new(f);
+        assert_eq!(r.bulk_out(2, &big, Duration::ZERO).unwrap(), big.len());
+    }
+
+    #[test]
+    fn recorder_writes_a_file_on_drop() {
+        let path = std::env::temp_dir().join(format!("oxrok-rec-{}.txt", std::process::id()));
+        {
+            let inner = Replay::from_text(TEXT).unwrap();
+            let mut rec = Recorder::to_file(Box::new(inner), path.to_str().unwrap());
+            rec.claim_interface(0).unwrap();
+        }
+        let text = std::fs::read_to_string(&path).unwrap();
+        let _ = std::fs::remove_file(&path);
+        assert!(text.contains("claim 0 -> ok\n"), "{text}");
     }
 
     #[test]

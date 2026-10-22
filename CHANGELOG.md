@@ -42,3 +42,13 @@ release may change the library API.
   AN_120, bit modes, pin and EEPROM reads, status byte stripping; a
   `probe` example that records a session. Verified on a LogicPort with
   both backends on macOS; the recording is a replay test.
+- `oxrok-driver-logicport`: the Intronix LogicPort LA1034 with all its
+  sample rates, state mode, compression, two trigger levels, frames and
+  the threshold DAC. FPGA images load from the vendor's `.ccf` or from
+  `.rbf` files found in the sigrok and oxrok firmware directories.
+  Output matches the libsigrok driver byte for byte; two recorded
+  sessions replay in CI.
+- `OXROK_USB_RECORD=FILE` records any driver session; fixtures store
+  large payloads as digests and tolerate repeated polls.
+- `oxrok-hil`: the hardware bench, driven by the ESP32 signal generator.
+- `docs/DRIVER_PORTING.md`, `docs/LOGICPORT.md`, `docs/DEVICES.md`.
