@@ -456,11 +456,14 @@ impl Device for Fx2lafwDevice {
         if self.transport.lock().expect("transport lock").is_some() {
             return Ok(());
         }
-        let mut t = if let Some(t) = self.pending.take() {
-            t
+        // (transport, already configured and claimed)
+        let (mut t, claimed) = if let Some(t) = self.pending.take() {
+            (t, false)
         } else {
             let mut t = oxrok_usb::open(&self.usb)?;
-            if !has_firmware(&self.usb) {
+            if has_firmware(&self.usb) {
+                (t, false)
+            } else {
                 let image = oxrok_core::firmware::read(
                     self.profile.firmware,
                     "install the sigrok fx2lafw firmware, see docs/DEVICES.md",
@@ -477,13 +480,15 @@ impl Device for Fx2lafwDevice {
                 )?;
                 self.info.conn = Some(new.conn());
                 self.usb = new;
-                // The OS may still be configuring the new device.
-                t = reopen_when_ready(&self.usb)?;
+                // The OS may still be configuring the new device; this
+                // retries and returns the transport claimed.
+                (reopen_when_ready(&self.usb)?, true)
             }
-            t
         };
-        t.set_configuration(CONFIGURATION)?;
-        t.claim_interface(INTERFACE)?;
+        if !claimed {
+            t.set_configuration(CONFIGURATION)?;
+            t.claim_interface(INTERFACE)?;
+        }
         let (major, minor) = check_firmware(t.as_mut())?;
         self.info.version = format!("{major}.{minor}");
         *self.transport.lock().expect("transport lock") = Some(t);

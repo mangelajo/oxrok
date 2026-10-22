@@ -120,7 +120,11 @@ their own codes, then 14 integer bits and a 3 bit code for the eighths.
   both backends.
 - macOS: a third party FTDI VCP driver that matches the device would
   block the claim with a busy error. `kextstat | grep -i ftdi` shows
-  whether one is loaded.
+  whether one is loaded. After a firmware upload and renumeration the
+  system can hand out a device whose configuration is active but whose
+  interface cannot be claimed ("interface not found"); the nusb backend
+  then sets the configuration again and reopens the device, which is
+  what libusb does on every open.
 - Windows: nusb needs the WinUSB driver bound to the device, as libusb
   does; use Zadig once. The control transfers go through the claimed
   interface, so drivers claim before any request (the FTDI layer does).

@@ -81,6 +81,9 @@ release may change the library API.
   `--protocol-decoder-ann-class`, `-P dec --show` and the decoder
   section of `-L`. Their output is identical to sigrok-cli's in every
   mode on synthetic captures.
+- fx2lafw on macOS: the open after a firmware upload no longer fails
+  with "interface not found"; the USB backend reconfigures and reopens
+  the device when its interface is missing.
 - Conformance fixtures from the bench: UART, I2C and SPI captures taken
   with the LogicPort from the ESP32, decoded identically to sigrok-cli.
 - Stacked decoders (`-P i2c,eeprom24xx`), synchronous as in

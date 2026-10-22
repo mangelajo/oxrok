@@ -143,6 +143,20 @@ impl Nusb {
         self.in_endpoints.clear();
         self.out_endpoints.clear();
     }
+
+    /// Opens the device again. The handle caches the descriptors it
+    /// read when it was opened; after a configuration change they are
+    /// stale.
+    fn reopen(&mut self) -> Result<()> {
+        self.drop_endpoints();
+        self.interfaces.clear();
+        let Handle::Nusb(id) = &self.info.handle else { return Ok(()) };
+        let devices = nusb::list_devices().wait().map_err(|e| map(&e, "usb"))?;
+        if let Some(d) = devices.into_iter().find(|d| d.id() == *id) {
+            self.device = d.open().wait().map_err(|e| map(&e, "reopen"))?;
+        }
+        Ok(())
+    }
 }
 
 impl Transport for Nusb {
@@ -151,11 +165,9 @@ impl Transport for Nusb {
     }
 
     fn set_configuration(&mut self, configuration: u8) -> Result<()> {
-        if self
-            .device
-            .active_configuration()
-            .is_ok_and(|c| c.configuration_value() == configuration)
-        {
+        let active = self.device.active_configuration().map(|c| c.configuration_value());
+        log::debug!("active configuration: {active:?}, wanted {configuration}");
+        if active.as_ref().is_ok_and(|c| *c == configuration) {
             return Ok(());
         }
         self.drop_endpoints();
@@ -163,19 +175,41 @@ impl Transport for Nusb {
         self.device
             .set_configuration(configuration)
             .wait()
-            .map_err(|e| map(&e, &format!("set configuration {configuration}")))
+            .map_err(|e| map(&e, &format!("set configuration {configuration}")))?;
+        self.reopen()
     }
 
     fn claim_interface(&mut self, interface: u8) -> Result<()> {
         if self.interfaces.contains_key(&interface) {
             return Ok(());
         }
-        let i = self
-            .device
-            .detach_and_claim_interface(interface)
-            .wait()
-            .map_err(|e| map(&e, &format!("claim interface {interface}")))?;
-        self.interfaces.insert(interface, i);
+        let claimed = match self.device.detach_and_claim_interface(interface).wait() {
+            Ok(i) => i,
+            Err(e) if e.kind() == nusb::ErrorKind::NotFound => {
+                // Right after a firmware renumeration macOS can hand out
+                // a device whose descriptors still show no interfaces.
+                // Setting the configuration again makes it re-read them,
+                // which is what libusb does on every open.
+                let seen =
+                    self.device.configurations().map(|c| c.interfaces().count()).sum::<usize>();
+                log::debug!(
+                    "interface {interface} not found ({seen} interfaces seen), reconfiguring"
+                );
+                let config =
+                    self.device.active_configuration().map_or(1, |c| c.configuration_value());
+                self.device
+                    .set_configuration(config)
+                    .wait()
+                    .map_err(|e| map(&e, &format!("set configuration {config}")))?;
+                self.reopen()?;
+                self.device
+                    .detach_and_claim_interface(interface)
+                    .wait()
+                    .map_err(|e| map(&e, &format!("claim interface {interface}")))?
+            }
+            Err(e) => return Err(map(&e, &format!("claim interface {interface}"))),
+        };
+        self.interfaces.insert(interface, claimed);
         Ok(())
     }
 
