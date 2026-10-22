@@ -149,7 +149,9 @@ case_ "spi transfers" --keep-header -- -i "$SPI" -P spi -A spi=mosi-transfer:mis
 case_ "spi binary" --keep-header -- -i "$SPI" -P spi -B spi=miso
 UARTSR="$(dirname "$0")/../crates/cli/tests/fixtures/uart-esp32.sr"
 SPISR="$(dirname "$0")/../crates/cli/tests/fixtures/spi-esp32.sr"
-case_ "uart real capture" --keep-header -- -l 4 -i "$UARTSR" -P uart:baudrate=115200:rx=D21
+I2CSR="$(dirname "$0")/../crates/cli/tests/fixtures/i2c-esp32.sr"
+case_ "uart real capture" --keep-header -- -l 4 -i "$UARTSR" -P uart:baudrate=921600:rx=D21
+case_ "i2c real capture" --keep-header -- -l 4 -i "$I2CSR" -P i2c:scl=D11:sda=D12
 case_ "spi real capture" --keep-header -- -l 4 -i "$SPISR" -P spi:clk=D28:miso=D26:mosi=D5:cs=D25
 # The documentation text is oxrok's own, and this libsigrokdecode build
 # predates decoder tags.

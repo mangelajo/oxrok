@@ -34,8 +34,10 @@ struct Args {
     filter: String,
     conn: Option<String>,
     port: Option<String>,
-    /// Only drive the generator (`--clk HZ`, `--set MASK`, `--cmd LINE`)
-    /// and exit.
+    /// Only drive the generator (`--clk HZ`, `--set MASK`, `--cmd LINE`,
+    /// `--delay MS` between them) and exit. Opening the serial port
+    /// resets the ESP32, so commands that belong together go in one
+    /// invocation.
     setup: Vec<String>,
 }
 
@@ -52,7 +54,7 @@ fn parse_args() -> Args {
             "-k" => a.filter = it.next().unwrap_or_default(),
             "--conn" => a.conn = it.next(),
             "--port" => a.port = it.next(),
-            "--clk" | "--set" | "--cmd" => {
+            "--clk" | "--set" | "--cmd" | "--delay" => {
                 a.setup.push(x.clone());
                 a.setup.push(it.next().unwrap_or_default());
             }
@@ -309,6 +311,11 @@ fn main() -> ExitCode {
         for pair in args.setup.chunks(2) {
             let r = if pair[0] == "--cmd" {
                 g.cmd(&pair[1], Duration::from_secs(30)).map(|reply| println!("{reply}"))
+            } else if pair[0] == "--delay" {
+                // Keeps the connection open, so the ESP32 is not reset
+                // between the commands around it.
+                std::thread::sleep(Duration::from_millis(pair[1].parse().unwrap_or(0)));
+                Ok(())
             } else {
                 let v: u32 = pair[1].parse().unwrap_or(0);
                 if pair[0] == "--clk" { g.clk(v) } else { g.set(v) }

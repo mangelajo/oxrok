@@ -19,6 +19,7 @@ const I2C: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/i2c-write
 const SPI: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/spi-mode0.vcd");
 const UART_ESP32: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/uart-esp32.sr");
 const SPI_ESP32: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/spi-esp32.sr");
+const I2C_ESP32: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/i2c-esp32.sr");
 
 #[test]
 fn uart_annotations_match_libsigrokdecode() {
@@ -131,25 +132,42 @@ fn spi_annotations_match_libsigrokdecode() {
     assert_eq!(out.stdout, [0x3c, 0xff, 0x7e]);
 }
 
-/// Captures taken with the `LogicPort` from the ESP32 on the bench,
-/// 2026-10-22: its boot banner on TX at 115200 baud, and an SPI
-/// transfer of `A5 01 3C` with `FF` on MISO. The goldens are sigrok-cli's
-/// output.
+/// Captures taken with the `LogicPort` from the ESP32 generator on the
+/// bench, 2026-10-22: its `PONG` reply at 921600 baud, an I2C write and
+/// read to address 0x50 played by its sequencer, and an SPI transfer of
+/// `A5 01 3C` with `FF` on MISO. The goldens are sigrok-cli's output.
 #[test]
 fn real_captures_match_libsigrokdecode() {
-    let (out, _, ok) = oxrok(&["-l", "4", "-i", UART_ESP32, "-P", "uart:baudrate=115200:rx=D21"]);
+    let (out, _, ok) = oxrok(&["-l", "4", "-i", UART_ESP32, "-P", "uart:baudrate=921600:rx=D21"]);
     assert!(ok);
     assert_eq!(out, include_str!("fixtures/uart-esp32.ann"));
     let (out, _, _) = oxrok(&[
         "-i",
         UART_ESP32,
         "-P",
-        "uart:baudrate=115200:rx=D21:format=ascii",
+        "uart:baudrate=921600:rx=D21:format=ascii",
         "-A",
         "uart=rx-data",
     ]);
     let text: String = out.lines().map(|l| l.trim_start_matches("uart-1: ")).collect();
-    assert!(text.starts_with("ets Jun  8 2016"), "{text}");
+    assert_eq!(text, "PONG[0D][0A]");
+    let (out, _, ok) = oxrok(&["-l", "4", "-i", I2C_ESP32, "-P", "i2c:scl=D11:sda=D12"]);
+    assert!(ok);
+    assert_eq!(out, include_str!("fixtures/i2c-esp32.ann"));
+    let (out, _, _) = oxrok(&[
+        "-i",
+        I2C_ESP32,
+        "-P",
+        "i2c:scl=D11:sda=D12",
+        "-A",
+        "i2c=address-write:address-read:data-write:data-read",
+    ]);
+    let text = out.lines().map(|l| l.trim_start_matches("i2c-1: ")).collect::<Vec<_>>().join(", ");
+    assert_eq!(
+        text,
+        "Write, Address write: 50, Data write: 0A, Data write: 55, Data write: AA, \
+         Read, Address read: 50, Data read: 3C"
+    );
     let (out, _, ok) =
         oxrok(&["-l", "4", "-i", SPI_ESP32, "-P", "spi:clk=D28:miso=D26:mosi=D5:cs=D25"]);
     assert!(ok);
