@@ -1,3 +1,8 @@
+// Counterpart in sigrok: sigrok-cli/session.c,
+//   Copyright (C) 2013 Bert Vermeulen <bert@biot.com>.
+// This file is an independent implementation written for oxrok from the
+// observed behaviour and the public interfaces.
+
 //! The output side shared by captures and file inputs: builds the output
 //! module, feeds it packets, writes the text.
 

@@ -1,3 +1,8 @@
+// Counterpart in sigrok: libsigrok/src/hwdriver.c,
+//   Copyright (C) 2013 Bert Vermeulen <bert@biot.com>.
+// This file is an independent implementation written for oxrok from the
+// observed behaviour and the public interfaces.
+
 //! Device option descriptors: which keys a device has and how they can
 //! be used.
 

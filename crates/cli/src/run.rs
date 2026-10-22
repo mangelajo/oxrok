@@ -1,3 +1,8 @@
+// Counterpart in sigrok: sigrok-cli/session.c,
+//   Copyright (C) 2013 Bert Vermeulen <bert@biot.com>.
+// This file is an independent implementation written for oxrok from the
+// observed behaviour and the public interfaces.
+
 //! Acquisition runs, `--get` and `--set`.
 
 use crate::args::Args;

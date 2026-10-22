@@ -1,3 +1,8 @@
+// Counterpart in sigrok: libsigrok/src/analog.c,
+//   Copyright (C) 2014 Bert Vermeulen <bert@biot.com>.
+// This file is an independent implementation written for oxrok from the
+// observed behaviour and the public interfaces.
+
 //! Measured quantities, their flags and units, for analog data.
 
 use std::fmt;

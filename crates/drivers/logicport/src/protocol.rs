@@ -1,3 +1,7 @@
+// Counterpart in sigrok: libsigrok/src/hardware/intronix-logicport/protocol.c,
+//   Copyright (C) 2026 Miguel Angel Ajo Pelayo <miguelangel@ajo.es>.
+// This file is a port by the same author, relicensed.
+
 //! The host protocol of the LogicPort.
 //!
 //! The LogicPort is an FT245BL USB FIFO bridge in front of an Altera

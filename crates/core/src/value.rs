@@ -1,3 +1,10 @@
+// Counterpart in sigrok: sigrok-cli/parsers.c,
+//   libsigrok/src/strutil.c,
+//   Copyright (C) 2011 Bert Vermeulen <bert@biot.com>,
+//   Copyright (C) 2010 Uwe Hermann <uwe@hermann-uwe.de>.
+// This file is an independent implementation written for oxrok from the
+// observed behaviour and the public interfaces.
+
 //! Configuration values and their kinds.
 
 use crate::analog::{Mq, MqFlags};

@@ -1,3 +1,9 @@
+// Counterpart in sigrok: libsigrok/src/session.c,
+//   Copyright (C) 2010-2012 Bert Vermeulen <bert@biot.com>,
+//   Copyright (C) 2015 Daniel Elstner <daniel.kitta@gmail.com>.
+// This file is an independent implementation written for oxrok from the
+// observed behaviour and the public interfaces.
+
 //! A session runs devices and hands their packets to a consumer.
 
 use crate::device::{Device, PacketSink};

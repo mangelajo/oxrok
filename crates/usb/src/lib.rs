@@ -1,3 +1,10 @@
+// Counterpart in sigrok: libsigrok/src/usb.c,
+//   Copyright (C) 2012 Uwe Hermann <uwe@hermann-uwe.de>,
+//   Copyright (C) 2012 Bert Vermeulen <bert@biot.com>,
+//   Copyright (C) 2015 Daniel Elstner <daniel.kitta@gmail.com>.
+// This file is an independent implementation written for oxrok from the
+// observed behaviour and the public interfaces.
+
 //! USB access for oxrok drivers.
 //!
 //! Drivers talk to a [`Transport`]: control and bulk transfers with

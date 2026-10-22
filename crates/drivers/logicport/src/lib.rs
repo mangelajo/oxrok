@@ -1,3 +1,7 @@
+// Counterpart in sigrok: libsigrok/src/hardware/intronix-logicport/api.c,
+//   Copyright (C) 2026 Miguel Angel Ajo Pelayo <miguelangel@ajo.es>.
+// This file is a port by the same author, relicensed.
+
 //! Intronix LogicPort LA1034 driver: 34 channels (D0-D31, CLK1, CLK2),
 //! 2048 sample entries with run length compression, 1 kHz to 500 MHz
 //! timing mode and state mode on an external clock, two hardware trigger

@@ -1,3 +1,8 @@
+// Counterpart in sigrok: libsigrok/src/output/binary.c,
+//   Copyright (C) 2010 Uwe Hermann <uwe@hermann-uwe.de>.
+// This file is an independent implementation written for oxrok from the
+// observed behaviour and the public interfaces.
+
 //! `binary`: the raw logic samples, nothing else.
 
 use super::{Output, OutputModule};

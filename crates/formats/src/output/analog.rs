@@ -1,3 +1,8 @@
+// Counterpart in sigrok: libsigrok/src/output/analog.c,
+//   Copyright (C) 2012 Bert Vermeulen <bert@biot.com>.
+// This file is an independent implementation written for oxrok from the
+// observed behaviour and the public interfaces.
+
 //! `analog`: one line per analog sample with its unit, e.g.
 //! `A0: 1000.0 mV DC`.
 

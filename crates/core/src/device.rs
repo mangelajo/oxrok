@@ -1,3 +1,9 @@
+// Counterpart in sigrok: libsigrok/src/device.c,
+//   libsigrok/src/hwdriver.c,
+//   Copyright (C) 2013 Bert Vermeulen <bert@biot.com>.
+// This file is an independent implementation written for oxrok from the
+// observed behaviour and the public interfaces.
+
 //! The hardware contract: drivers find devices, devices acquire.
 
 use crate::channel::{Channel, ChannelGroup};

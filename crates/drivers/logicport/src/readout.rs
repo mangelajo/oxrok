@@ -1,3 +1,7 @@
+// Counterpart in sigrok: libsigrok/src/hardware/intronix-logicport/protocol.c (the readout),
+//   Copyright (C) 2026 Miguel Angel Ajo Pelayo <miguelangel@ajo.es>.
+// This file is a port by the same author, relicensed.
+
 //! Decoding the sample memory into samples.
 //!
 //! Sample memory has 2048 entries of 40 bits: four lanes holding D0-D31

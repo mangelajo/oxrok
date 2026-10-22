@@ -1,3 +1,8 @@
+// Counterpart in sigrok: sigrok-cli/show.c,
+//   Copyright (C) 2013 Bert Vermeulen <bert@biot.com>.
+// This file is an independent implementation written for oxrok from the
+// observed behaviour and the public interfaces.
+
 //! `--version`, `-L`, `--scan` and `--show`.
 
 use crate::args::Args;

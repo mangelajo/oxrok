@@ -1,3 +1,12 @@
+// Counterpart in sigrok: libsigrok/src/hardware/demo/protocol.c,
+//   Copyright (C) 2010 Uwe Hermann <uwe@hermann-uwe.de>,
+//   Copyright (C) 2011 Olivier Fauchon <olivier@aixmarseille.com>,
+//   Copyright (C) 2012 Alexandru Gagniuc <mr.nuke.me@gmail.com>,
+//   Copyright (C) 2015 Bartosz Golaszewski <bgolaszewski@baylibre.com>,
+//   Copyright (C) 2019 Frank Stettner <frank-stettner@gmx.net>.
+// This file is an independent implementation; the logo bitmap was
+// replaced by oxrok's own pattern.
+
 //! The signal patterns of the demo device.
 
 use std::f64::consts::PI;

@@ -1,3 +1,8 @@
+// Counterpart in sigrok: libsigrok/src/output/hex.c,
+//   Copyright (C) 2014 Bert Vermeulen <bert@biot.com>.
+// This file is an independent implementation written for oxrok from the
+// observed behaviour and the public interfaces.
+
 //! `hex`: one line per channel, eight samples per hex byte, first sample
 //! in the most significant bit.
 

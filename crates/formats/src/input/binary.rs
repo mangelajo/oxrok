@@ -1,3 +1,8 @@
+// Counterpart in sigrok: libsigrok/src/input/binary.c,
+//   Copyright (C) 2013 Bert Vermeulen <bert@biot.com>.
+// This file is an independent implementation written for oxrok from the
+// observed behaviour and the public interfaces.
+
 //! `binary`: raw logic samples, `ceil(numchannels / 8)` bytes each.
 
 use super::{Input, InputModule, InputOption, InputOptionKind};

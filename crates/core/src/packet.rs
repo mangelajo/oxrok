@@ -1,3 +1,9 @@
+// Counterpart in sigrok: libsigrok/src/session.c (the datafeed packets),
+//   Copyright (C) 2010-2012 Bert Vermeulen <bert@biot.com>,
+//   Copyright (C) 2015 Daniel Elstner <daniel.kitta@gmail.com>.
+// This file is an independent implementation written for oxrok from the
+// observed behaviour and the public interfaces.
+
 //! The data feed: what a device sends while it acquires.
 
 use crate::analog::{Mq, MqFlags, Unit};

@@ -1,3 +1,10 @@
+// Counterpart in sigrok: libsigrok/src/session_file.c,
+//   libsigrok/src/output/srzip.c,
+//   Copyright (C) 2013 Bert Vermeulen <bert@biot.com>,
+//   Copyright (C) 2014 Bert Vermeulen <bert@biot.com>.
+// This file is an independent implementation written for oxrok from the
+// observed behaviour and the public interfaces.
+
 //! The sigrok session file format (`.sr`).
 //!
 //! A session file is a zip archive with:

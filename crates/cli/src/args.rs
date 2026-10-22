@@ -1,3 +1,8 @@
+// Counterpart in sigrok: sigrok-cli/options.c,
+//   Copyright (C) 2013 Bert Vermeulen <bert@biot.com>.
+// This file is an independent implementation written for oxrok from the
+// observed behaviour and the public interfaces.
+
 //! Command line flags, sigrok-cli compatible.
 
 use clap::Parser;

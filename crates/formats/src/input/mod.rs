@@ -1,3 +1,8 @@
+// Counterpart in sigrok: libsigrok/src/input/input.c,
+//   Copyright (C) 2014 Bert Vermeulen <bert@biot.com>.
+// This file is an independent implementation written for oxrok from the
+// observed behaviour and the public interfaces.
+
 //! Input modules read files into the packet stream.
 
 use oxrok_core::{Channel, Packet, Result};

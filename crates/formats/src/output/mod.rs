@@ -1,3 +1,8 @@
+// Counterpart in sigrok: libsigrok/src/output/output.c,
+//   Copyright (C) 2014 Bert Vermeulen <bert@biot.com>.
+// This file is an independent implementation written for oxrok from the
+// observed behaviour and the public interfaces.
+
 //! Output modules turn packets into text or bytes.
 
 use oxrok_core::{Channel, ChannelKind, Error, Key, Packet, Result};

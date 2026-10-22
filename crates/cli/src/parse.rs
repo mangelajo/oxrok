@@ -1,3 +1,8 @@
+// Counterpart in sigrok: sigrok-cli/parsers.c,
+//   Copyright (C) 2011 Bert Vermeulen <bert@biot.com>.
+// This file is an independent implementation written for oxrok from the
+// observed behaviour and the public interfaces.
+
 //! Parsers for the sigrok-cli argument syntaxes.
 
 use crate::args::Args;

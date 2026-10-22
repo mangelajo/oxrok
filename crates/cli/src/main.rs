@@ -1,3 +1,8 @@
+// Counterpart in sigrok: sigrok-cli/main.c,
+//   Copyright (C) 2013 Bert Vermeulen <bert@biot.com>.
+// This file is an independent implementation written for oxrok from the
+// observed behaviour and the public interfaces.
+
 //! `oxrok`: a sigrok-cli compatible command line for oxrok.
 //!
 //! The flags and the output are the ones sigrok-cli users know, so

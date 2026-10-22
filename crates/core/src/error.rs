@@ -1,3 +1,8 @@
+// Counterpart in sigrok: libsigrok/src/error.c,
+//   Copyright (C) 2012 Uwe Hermann <uwe@hermann-uwe.de>.
+// This file is an independent implementation written for oxrok from the
+// observed behaviour and the public interfaces.
+
 //! The error type shared by every oxrok crate.
 
 /// What can go wrong when talking to a device, a file or a session.

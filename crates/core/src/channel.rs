@@ -1,3 +1,8 @@
+// Counterpart in sigrok: libsigrok/src/device.c,
+//   Copyright (C) 2013 Bert Vermeulen <bert@biot.com>.
+// This file is an independent implementation written for oxrok from the
+// observed behaviour and the public interfaces.
+
 //! Channels and channel groups of a device.
 
 /// Whether a channel carries logic (one bit per sample) or analog

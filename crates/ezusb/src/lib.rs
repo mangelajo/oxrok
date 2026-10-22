@@ -1,3 +1,8 @@
+// Counterpart in sigrok: libsigrok/src/ezusb.c,
+//   Copyright (C) 2010-2012 Bert Vermeulen <bert@biot.com>.
+// This file is an independent implementation written for oxrok from the
+// observed behaviour and the public interfaces.
+
 //! Firmware upload for Cypress EZ-USB FX2 devices.
 //!
 //! The FX2 boot loader answers vendor request 0xa0 ("firmware load"):

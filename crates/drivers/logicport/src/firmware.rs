@@ -1,3 +1,7 @@
+// Counterpart in sigrok: libsigrok/src/hardware/intronix-logicport/protocol.c (the ccf loader),
+//   Copyright (C) 2026 Miguel Angel Ajo Pelayo <miguelangel@ajo.es>.
+// This file is a port by the same author, relicensed.
+
 //! The FPGA configuration images.
 //!
 //! `LogicPort.ccf` from the vendor software is used unmodified, installed
