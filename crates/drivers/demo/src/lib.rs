@@ -12,8 +12,8 @@ pub mod patterns;
 
 use oxrok_core::{
     Access, AnalogData, Channel, ChannelGroup, ChannelKind, Device, DeviceClass, DeviceInfo,
-    Driver, Error, Key, Mq, MqFlags, OptionDesc, Packet, PacketSink, Result, TriggerMatch, Value,
-    ValueList,
+    Driver, Error, Key, Mq, MqFlags, OptionDesc, Packet, PacketSink, PreTriggerBuffer, Result,
+    SoftTrigger, Trigger, TriggerMatch, Value, ValueList,
 };
 use patterns::{ANALOG_TABLE_LEN, AnalogPattern, LogicGen, LogicPattern, Rng, analog_table};
 use std::sync::Arc;
@@ -112,6 +112,7 @@ pub struct DemoDevice {
     groups: Vec<ChannelGroup>,
     num_logic: usize,
     settings: Settings,
+    trigger: Option<Trigger>,
     worker: Option<Worker>,
 }
 
@@ -164,6 +165,7 @@ impl DemoDevice {
                 logic_pattern: LogicPattern::Oxrok,
                 analog,
             },
+            trigger: None,
             worker: None,
         }
     }
@@ -386,11 +388,17 @@ impl Device for DemoDevice {
         })
     }
 
+    fn set_trigger(&mut self, trigger: Option<Trigger>) -> Result<()> {
+        self.trigger = trigger;
+        Ok(())
+    }
+
     fn start(&mut self, sink: PacketSink) -> Result<()> {
         if self.worker.is_some() {
             return Err(Error::Busy);
         }
         let settings = self.settings.clone();
+        let trigger = self.trigger.clone();
         let logic_enabled: Vec<usize> = self
             .channels
             .iter()
@@ -410,6 +418,7 @@ impl Device for DemoDevice {
             .name("demo acquisition".into())
             .spawn(move || {
                 let mut acq = Acquisition::new(settings, num_logic, &logic_enabled, analog_enabled);
+                acq.set_trigger(trigger.as_ref());
                 acq.run(&sink, &stop2);
             })
             .map_err(Error::Io)?;
@@ -436,6 +445,10 @@ struct Acquisition {
     rng: Rng,
     /// Averaging state per analog generator: sum and count.
     avg: Vec<(f64, u64)>,
+    /// The software trigger, until it fires.
+    soft: Option<SoftTrigger>,
+    /// Samples kept before the trigger, up to the capture ratio.
+    pre: PreTriggerBuffer,
 }
 
 impl Acquisition {
@@ -458,6 +471,8 @@ impl Acquisition {
         let tables = AnalogPattern::ALL.iter().map(|p| analog_table(*p)).collect();
         let avg = vec![(0.0, 0); settings.analog.len()];
         Acquisition {
+            soft: None,
+            pre: PreTriggerBuffer::new(1, 0),
             settings,
             logic,
             logic_mask,
@@ -466,6 +481,17 @@ impl Acquisition {
             rng: Rng::new(seed.rotate_left(17)),
             avg,
         }
+    }
+
+    /// Arms the software trigger on the logic channels. Samples before
+    /// the trigger are dropped, except the capture ratio's share of the
+    /// sample limit.
+    fn set_trigger(&mut self, trigger: Option<&Trigger>) {
+        let Some(g) = &self.logic else { return };
+        let unit = g.unit_size();
+        self.soft = trigger.and_then(|t| SoftTrigger::new(t, unit));
+        let pre = self.settings.limit_samples * self.settings.capture_ratio / 100;
+        self.pre = PreTriggerBuffer::new(unit, pre as usize);
     }
 
     fn run(&mut self, sink: &PacketSink, stop: &AtomicBool) {
@@ -512,11 +538,12 @@ impl Acquisition {
                 continue;
             }
             let covered_us = todo * 1_000_000 / s.samplerate;
-            if !self.send_logic(sink, todo) || !self.send_analog(sink, sent, todo) {
+            let Some(emitted) = self.send_logic(sink, todo) else { return };
+            if !self.send_analog(sink, sent, emitted) {
                 return;
             }
-            sent += todo;
-            frame_sent += todo;
+            sent += emitted;
+            frame_sent += emitted;
             spent_us += covered_us;
             if frames && frame_sent >= SAMPLES_PER_FRAME {
                 sink.send(Packet::FrameEnd);
@@ -545,11 +572,15 @@ impl Acquisition {
         sink.send(Packet::End);
     }
 
-    fn send_logic(&mut self, sink: &PacketSink, count: u64) -> bool {
-        let Some(g) = &mut self.logic else { return true };
+    /// Generates `count` logic samples and sends those past the
+    /// trigger. Returns the number sent, or `None` when the consumer is
+    /// gone.
+    fn send_logic(&mut self, sink: &PacketSink, count: u64) -> Option<u64> {
+        let Some(g) = &mut self.logic else { return Some(count) };
         let unit = g.unit_size();
         let per_chunk = (LOGIC_CHUNK_BYTES / unit).max(1) as u64;
         let mut left = count;
+        let mut emitted = 0u64;
         while left > 0 {
             let n = left.min(per_chunk) as usize;
             let mut data = Vec::with_capacity(n * unit);
@@ -559,12 +590,34 @@ impl Acquisition {
                     *b &= m;
                 }
             }
-            if !sink.send(Packet::logic(unit, data)) {
-                return false;
-            }
             left -= n as u64;
+            if let Some(soft) = self.soft.as_mut() {
+                match soft.feed(&data) {
+                    None => {
+                        self.pre.push(&data);
+                        continue;
+                    }
+                    Some(i) => {
+                        let mut before = self.pre.take();
+                        before.extend_from_slice(&data[..i * unit]);
+                        if !before.is_empty() {
+                            emitted += (before.len() / unit) as u64;
+                            if !sink.send(Packet::logic(unit, before)) {
+                                return None;
+                            }
+                        }
+                        sink.send(Packet::Trigger);
+                        data.drain(..i * unit);
+                        self.soft = None;
+                    }
+                }
+            }
+            emitted += (data.len() / unit) as u64;
+            if !sink.send(Packet::logic(unit, data)) {
+                return None;
+            }
         }
-        true
+        Some(emitted)
     }
 
     fn send_analog(&mut self, sink: &PacketSink, from: u64, count: u64) -> bool {

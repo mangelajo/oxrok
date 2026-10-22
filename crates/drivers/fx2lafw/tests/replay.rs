@@ -123,3 +123,15 @@ fn recorded_capture_replays() {
     let d0 = bits.lines().find(|l| l.starts_with("D0:")).unwrap();
     assert!(d0.chars().skip(3).all(|c| c == '1' || c == ' '), "{d0}");
 }
+
+#[test]
+fn probe_names_rename_and_trim_channels() {
+    let replay = Replay::from_text(SESSION).unwrap();
+    let mut dev = Fx2lafwDevice::from_transport(Box::new(replay)).unwrap();
+    dev.name_channels("uart,cs");
+    let names: Vec<&str> = dev.channels().iter().map(|c| c.name.as_str()).collect();
+    assert_eq!(names, ["rx", "tx", "cs", "D3", "D4", "D5", "D6", "D7"]);
+    dev.name_channels("-i2c");
+    assert_eq!(dev.channels().len(), 2);
+    assert_eq!(dev.channel_groups()[0].channels, [0, 1]);
+}

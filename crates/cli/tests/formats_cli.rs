@@ -42,9 +42,9 @@ const WALKING_ONE_BITS: &str = "Acquisition with 4/4 channels at 200 kHz\n\
 const WALKING_ONE_VCD_BODY: &str = "$comment\n  Acquisition with 4/4 channels at 200 kHz\n$end\n\
 $timescale 1 us $end\n$var wire 1 ! D0 $end\n$var wire 1 \" D1 $end\n$var wire 1 # D2 $end\n\
 $var wire 1 $ D3 $end\n$upscope $end\n$enddefinitions $end\n\
-#0 0! 0\" 0# 0$\n#5 1!\n#10 0! 1\"\n#15 0\" 1#\n#20 0# 1$\n#25 0$\n#30 1!\n#35 0! 1\"\n\
-#40 0\" 1#\n#45 0# 1$\n#50 0$\n#55 1!\n#60 0! 1\"\n#65 0\" 1#\n#70 0# 1$\n#75 0$\n#80 1!\n\
-#85 0! 1\"\n#90 0\" 1#\n#95 0# 1$\n#100\n";
+\n#0  0! 0\" 0# 0$\n#5  1!\n#10  0! 1\"\n#15  0\" 1#\n#20  0# 1$\n#25  0$\n#30  1!\n#35  0! 1\"\n\
+#40  0\" 1#\n#45  0# 1$\n#50  0$\n#55  1!\n#60  0! 1\"\n#65  0\" 1#\n#70  0# 1$\n#75  0$\n#80  1!\n\
+#85  0! 1\"\n#90  0\" 1#\n#95  0# 1$\n#100\n";
 
 #[test]
 fn session_file_round_trip() {
@@ -170,7 +170,7 @@ fn csv_matches_sigrok_cli() {
     let (out, _, _) = oxrok(&args);
     assert_eq!(
         out,
-        "Time,D0,D1,D2,D3\n5,0,0,0,0\n10,1,0,0,0\n15,0,1,0,0\n20,0,0,1,0\n25,0,0,0,1\n30,0,0,0,0\n"
+        "Time,D0,D1,D2,D3\n0,0,0,0,0\n5,1,0,0,0\n10,0,1,0,0\n15,0,0,1,0\n20,0,0,0,1\n25,0,0,0,0\n"
     );
     let (out, _, _) = oxrok(&[
         "-d",
@@ -193,7 +193,7 @@ fn csv_matches_sigrok_cli() {
         "-O",
         "csv:time=true:dedup=true:header=false",
     ]);
-    assert_eq!(out, "microseconds,logic,logic,logic,logic\n5,1,1,1,1\n30,1,1,1,1\n");
+    assert_eq!(out, "microseconds,logic,logic,logic,logic\n0,1,1,1,1\n25,1,1,1,1\n");
     let args: Vec<&str> = W1
         .iter()
         .copied()
@@ -209,7 +209,7 @@ fn csv_matches_sigrok_cli() {
         "-O",
         "csv:time=true:header=false",
     ]);
-    assert_eq!(out, "microseconds,V DC,V DC\n5,-10,0\n10,-10,3.09017\n15,-10,5.87785\n");
+    assert_eq!(out, "microseconds,V DC,V DC\n0,-10,0\n5,-10,3.09017\n10,-10,5.87785\n");
 }
 
 #[test]
@@ -249,7 +249,7 @@ fn list_shows_inputs_and_outputs() {
     assert!(out.contains("  srzip                srzip session file format data\n  vcd                  Value Change Dump data\n"));
     let (out, _, _) = oxrok(&["-I", "vcd", "--show"]);
     assert!(out.starts_with("ID: vcd\nName: VCD\n"));
-    assert!(out.contains("    downsample: "));
+    assert!(out.contains("  downsample: "));
 }
 
 #[test]

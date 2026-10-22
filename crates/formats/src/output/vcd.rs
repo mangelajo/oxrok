@@ -131,8 +131,9 @@ impl Vcd {
             };
             let _ = writeln!(s, "$var {kind} {size} {} {} $end", sig.ident, sig.name);
         }
-        // No newline after the last line: every timestamp line starts with one.
-        s.push_str("$upscope $end\n$enddefinitions $end");
+        // Every timestamp line starts with a newline, so the header's
+        // final newline makes the blank line libsigrok 0.6 prints.
+        s.push_str("$upscope $end\n$enddefinitions $end\n");
         s
     }
 
@@ -168,7 +169,8 @@ impl Vcd {
         if values.is_empty() {
             out.push(b'\n');
         } else {
-            out.push(b' ');
+            // Two spaces after the timestamp, as libsigrok 0.6 writes.
+            out.extend_from_slice(b"  ");
             out.extend_from_slice(values.as_bytes());
         }
     }
@@ -304,7 +306,7 @@ mod tests {
         let text = String::from_utf8(out).unwrap();
         let body: String =
             text.lines().skip_while(|l| !l.starts_with('#')).collect::<Vec<_>>().join("\n");
-        assert_eq!(body, "#0 0! 0\"\n#5 1!\n#15 0! 1\"\n#20");
-        assert!(text.contains("$timescale 1 us $end\n$scope module oxrok $end\n$var wire 1 ! D0 $end\n$var wire 1 \" D1 $end\n$upscope $end\n$enddefinitions $end\n#0"));
+        assert_eq!(body, "#0  0! 0\"\n#5  1!\n#15  0! 1\"\n#20");
+        assert!(text.contains("$timescale 1 us $end\n$scope module oxrok $end\n$var wire 1 ! D0 $end\n$var wire 1 \" D1 $end\n$upscope $end\n$enddefinitions $end\n\n#0"));
     }
 }

@@ -145,9 +145,10 @@ pub fn transfer_plan(samplerate: u64, unit_size: usize) -> (usize, usize, Durati
 pub struct Fx2lafwDriver;
 
 static CLASSES: [DeviceClass; 1] = [DeviceClass::LogicAnalyzer];
-static SCAN_OPTIONS: [Key; 1] = [Key::Conn];
-static DEV_OPTIONS: [OptionDesc; 6] = [
+static SCAN_OPTIONS: [Key; 2] = [Key::Conn, Key::ProbeNames];
+static DEV_OPTIONS: [OptionDesc; 7] = [
     OptionDesc::new(Key::Continuous, Access::NONE),
+    OptionDesc::new(Key::LimitFrames, Access::GET_SET),
     OptionDesc::new(Key::LimitSamples, Access::GET_SET),
     OptionDesc::new(Key::Conn, Access::GET),
     OptionDesc::new(Key::Samplerate, Access::GET_SET_LIST),
@@ -181,9 +182,11 @@ impl Driver for Fx2lafwDriver {
 
     fn scan(&self, options: &[(Key, Value)]) -> Result<Vec<Box<dyn Device>>> {
         let mut conn = None;
+        let mut probe_names = None;
         for (key, value) in options {
             match key {
                 Key::Conn => conn = value.as_str().map(str::to_owned),
+                Key::ProbeNames => probe_names = value.as_str().map(str::to_owned),
                 other => return Err(Error::UnknownKey(other.id().to_owned())),
             }
         }
@@ -194,7 +197,11 @@ impl Driver for Fx2lafwDriver {
                 continue;
             }
             let profile = find_profile(info.id()).expect("found by id");
-            devices.push(Box::new(Fx2lafwDevice::new(info, profile, None)));
+            let mut dev = Fx2lafwDevice::new(info, profile, None);
+            if let Some(spec) = &probe_names {
+                dev.name_channels(spec);
+            }
+            devices.push(Box::new(dev));
         }
         Ok(devices)
     }
@@ -205,6 +212,7 @@ impl Driver for Fx2lafwDriver {
 struct Settings {
     samplerate: u64,
     limit_samples: u64,
+    limit_frames: u64,
     capture_ratio: u64,
 }
 
@@ -249,7 +257,12 @@ impl Fx2lafwDevice {
             profile,
             channels,
             groups,
-            settings: Settings { samplerate: SAMPLERATES[0], limit_samples: 0, capture_ratio: 0 },
+            settings: Settings {
+                samplerate: SAMPLERATES[0],
+                limit_samples: 0,
+                limit_frames: 1,
+                capture_ratio: 0,
+            },
             trigger: None,
             pending: transport,
             transport: Arc::new(Mutex::new(None)),
@@ -265,6 +278,20 @@ impl Fx2lafwDevice {
         let profile =
             find_profile(usb.id()).ok_or_else(|| Error::arg("not a known fx2lafw device"))?;
         Ok(Self::new(usb, profile, Some(transport)))
+    }
+
+    /// Applies a `probe_names` spec (see
+    /// `oxrok_core::util::parse_probe_names`); a spec starting with `-`
+    /// leaves only the named channels.
+    pub fn name_channels(&mut self, spec: &str) {
+        let defaults: Vec<&str> = self.channels.iter().map(|c| c.name.as_str()).collect();
+        let names = oxrok_core::util::parse_probe_names(spec, &defaults);
+        self.channels.truncate(names.len());
+        for (c, n) in self.channels.iter_mut().zip(names) {
+            c.name = n;
+        }
+        let count = self.channels.len();
+        self.groups = vec![ChannelGroup::new("Logic", (0..count).collect())];
     }
 
     /// True when a channel above D7 is enabled on a 16 channel device.
@@ -365,6 +392,7 @@ impl Device for Fx2lafwDevice {
             Key::Conn => Value::Str(self.usb.conn()),
             Key::Samplerate => Value::U64(self.settings.samplerate),
             Key::LimitSamples => Value::U64(self.settings.limit_samples),
+            Key::LimitFrames => Value::U64(self.settings.limit_frames),
             Key::CaptureRatio => Value::U64(self.settings.capture_ratio),
             other => return Err(Error::UnknownKey(other.id().to_owned())),
         })
@@ -384,6 +412,7 @@ impl Device for Fx2lafwDevice {
                 self.settings.samplerate = r;
             }
             Key::LimitSamples => self.settings.limit_samples = value.as_u64().ok_or_else(bad)?,
+            Key::LimitFrames => self.settings.limit_frames = value.as_u64().ok_or_else(bad)?,
             Key::CaptureRatio => {
                 let r = value.as_u64().ok_or_else(bad)?;
                 if r > 100 {
@@ -478,8 +507,10 @@ impl Device for Fx2lafwDevice {
             samplerate: rate,
             unit_size,
             limit_samples: self.settings.limit_samples,
+            limit_frames: self.settings.limit_frames,
             pre_trigger: self.settings.limit_samples * self.settings.capture_ratio / 100,
             soft,
+            trigger: self.trigger.clone(),
         };
         let transport = self.transport.lock().expect("transport lock").take();
         let Some(transport) = transport else {
@@ -518,12 +549,49 @@ struct Acquisition {
     samplerate: u64,
     unit_size: usize,
     limit_samples: u64,
+    /// Captures of `limit_samples` each; 0 means until stopped. Frame
+    /// packets are sent only for more than one.
+    limit_frames: u64,
     pre_trigger: u64,
     soft: Option<SoftTrigger>,
+    trigger: Option<Trigger>,
 }
 
 impl Acquisition {
     fn run(mut self, t: &mut dyn Transport, sink: &PacketSink, stop: &AtomicBool) -> Result<()> {
+        let frames = self.limit_frames != 1 && self.limit_samples > 0;
+        let mut done = 0u64;
+        let mut first = true;
+        loop {
+            if frames {
+                sink.send(Packet::FrameBegin);
+            }
+            if let Some(trigger) = &self.trigger {
+                self.soft = SoftTrigger::new(trigger, self.unit_size);
+            }
+            self.capture(t, sink, stop, first)?;
+            first = false;
+            if frames {
+                sink.send(Packet::FrameEnd);
+            }
+            done += 1;
+            if !frames
+                || stop.load(Ordering::SeqCst)
+                || (self.limit_frames > 0 && done >= self.limit_frames)
+            {
+                return Ok(());
+            }
+        }
+    }
+
+    /// One capture of `limit_samples` samples (or until stopped).
+    fn capture(
+        &mut self,
+        t: &mut dyn Transport,
+        sink: &PacketSink,
+        stop: &AtomicBool,
+        header: bool,
+    ) -> Result<()> {
         let (size, depth, timeout) = transfer_plan(self.samplerate, self.unit_size);
         let mut stream = t.bulk_in_stream(ENDPOINT_IN, size, depth)?;
         t.control_out(ControlRequest::vendor(CMD_START, 0, 0), &self.command, CONTROL_TIMEOUT)?;
@@ -532,7 +600,9 @@ impl Acquisition {
             self.command[0],
             u16::from_be_bytes([self.command[1], self.command[2]])
         );
-        sink.send(Packet::header());
+        if header {
+            sink.send(Packet::header());
+        }
         let mut pre = PreTriggerBuffer::new(self.unit_size, self.pre_trigger as usize);
         let mut sent = 0u64;
         let mut empty = 0usize;

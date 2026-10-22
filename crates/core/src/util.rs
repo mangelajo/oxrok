@@ -294,3 +294,56 @@ mod tests {
         assert_eq!(parse_voltage("2 A"), None);
     }
 }
+
+/// Parses a `probe_names` scan option: a comma separated list of
+/// channel names, where an item may be an alias for a group of signals
+/// (`uart`, `i2c`, `spi`, `jtag`, `swd`). The result is padded with
+/// `defaults` unless the spec starts with `-`, and never longer than
+/// `defaults`. An empty spec returns the defaults.
+pub fn parse_probe_names(spec: &str, defaults: &[&str]) -> Vec<String> {
+    let spec = spec.trim();
+    let (spec, pad) = match spec.strip_prefix('-') {
+        Some(rest) => (rest, false),
+        None => (spec, true),
+    };
+    let mut names: Vec<String> = Vec::new();
+    for item in spec.split(',').map(str::trim).filter(|s| !s.is_empty()) {
+        let alias: &[&str] = match item.to_ascii_lowercase().as_str() {
+            "uart" => &["rx", "tx"],
+            "i2c" => &["scl", "sda"],
+            "spi" => &["cs", "clk", "mosi", "miso"],
+            "jtag" => &["tdi", "tdo", "tck", "tms"],
+            "swd" => &["swclk", "swdio"],
+            _ => &[],
+        };
+        if alias.is_empty() {
+            names.push(item.to_owned());
+        } else {
+            names.extend(alias.iter().map(|s| (*s).to_owned()));
+        }
+    }
+    if names.is_empty() {
+        return defaults.iter().map(|s| (*s).to_owned()).collect();
+    }
+    names.truncate(defaults.len());
+    if pad {
+        for d in &defaults[names.len()..] {
+            names.push((*d).to_owned());
+        }
+    }
+    names
+}
+
+#[cfg(test)]
+mod probe_names_tests {
+    use super::parse_probe_names;
+
+    #[test]
+    fn probe_names() {
+        let d = ["D0", "D1", "D2", "D3"];
+        assert_eq!(parse_probe_names("", &d), ["D0", "D1", "D2", "D3"]);
+        assert_eq!(parse_probe_names("rx,tx", &d), ["rx", "tx", "D2", "D3"]);
+        assert_eq!(parse_probe_names("-i2c", &d), ["scl", "sda"]);
+        assert_eq!(parse_probe_names("spi,a,b,c", &d), ["cs", "clk", "mosi", "miso"]);
+    }
+}

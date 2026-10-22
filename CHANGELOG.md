@@ -6,6 +6,13 @@ release may change the library API.
 
 ## [Unreleased]
 
+### Changed
+
+- The reference for byte compatibility is now sigrok-cli 0.8.0-git with
+  libsigrok 0.6.0-git: the CSV time column starts at 0 and the VCD body
+  has a blank line after the definitions and two spaces after each
+  timestamp. `-I` and `-O --show` print options as 0.8 does.
+
 ### Added
 
 - Workspace with `oxrok-core`, `oxrok-formats`, `oxrok-driver-demo` and
@@ -59,6 +66,10 @@ release may change the library API.
   firmware files.
 - `oxrok_core::SoftTrigger` and `PreTriggerBuffer`: host side triggers
   for streaming devices.
+- `tools/diffcli.sh`: runs the documented flows through sigrok-cli and
+  oxrok and diffs them, with `--hw` for the LogicPort and fx2lafw cases.
+- The demo device honours triggers through the software trigger.
+- `fx2lafw`: `probe_names` scan option and `limit_frames`.
 - `oxrok-driver-fx2lafw`: Saleae Logic clones, USBee, Cypress FX2 and
   sigrok FX2 LA boards, 8 or 16 channels, with the firmware upload and
   the software trigger. Verified on a Saleae Logic clone: firmware

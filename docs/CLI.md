@@ -2,8 +2,11 @@
 
 `oxrok` accepts the sigrok-cli flags for the common flows and prints the
 same output, byte for byte after the first header line (which names the
-tool). The test suites carry reference output captured from sigrok-cli
-0.7.2 with libsigrok 0.5.2.
+tool). The reference is sigrok-cli 0.8.0-git with libsigrok 0.6.0-git
+(the current upstream code); `tools/diffcli.sh` runs the documented
+flows through both tools and diffs them. Where 0.5.2 differed (the CSV
+time column started one period late, the VCD body had no blank line
+and single spaces), oxrok follows 0.6.
 
 ## Differences from sigrok-cli
 
@@ -12,6 +15,9 @@ Deliberate, and kept small:
 - The header line of the logic outputs says `oxrok <version>` instead of
   `libsigrok <version>`. Same for `$version` and `$scope` in VCD files,
   `sigrok version` in session metadata and the CSV comment header.
+  libsigrok's VCD reader prefixes the scope name to the channels of a
+  file oxrok wrote (`oxrok.D0`); oxrok's reader treats both scope names
+  as its own.
 - `META samplerate: N` lines are printed only when the `analog` output
   is selected with `-O analog`. sigrok-cli prints them whenever a file
   input or a driver reports a sample rate, even into binary output.
@@ -26,6 +32,15 @@ Deliberate, and kept small:
   sigrok-cli behaviour for scripts that want it.
 - Triggers: `-t` takes several stages separated by `;`, e.g.
   `-t 'D0=r;D1=1'`. One stage is written as in sigrok-cli.
+- The demo device honours triggers (sigrok's ignores them): samples
+  before the trigger are dropped, except the capture ratio's share of
+  the sample limit, and the trigger is marked in the output.
+- `-I module --show` and `-O module --show` print the same option
+  names with oxrok's own wording.
+- `fx2lafw` sends frame packets only when `limit_frames` is not 1.
+  libsigrok wraps every capture in a frame and re-arms once more before
+  stopping, so its `bits` output ends with `FRAME-END` and
+  `FRAME-BEGIN` lines.
 - The demo device's default logic pattern is `oxrok`, a bitmap of that
   word. The other pattern names are the same. Disabled channels read low
   individually; sigrok's demo masks by the number of enabled channels.
@@ -36,7 +51,8 @@ Deliberate, and kept small:
 ## Not available yet
 
 - `-P`, `-A`, `-B`, `-M` (protocol decoders): phase 6 of the roadmap.
-- `-T` (transform modules), `--list-supported-wiki`.
+- `-T` (transform modules), `--list-supported-wiki`, the `gnuplot` and
+  `scale` options of the `csv` output.
 - The `csv` input and the other long tail input modules (ChronoVu LA8,
   STF, Trace32, ISF, WAV, LogicPort .lpf).
 - fx2lafw and the other hardware drivers: phase 4 of the roadmap.

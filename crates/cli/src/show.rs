@@ -47,16 +47,25 @@ pub fn input_detail(args: &Args) -> Result<()> {
     let m = oxrok_formats::input::find(&id)
         .ok_or_else(|| Error::Arg(format!("Unknown input module '{id}'.")))?;
     println!("ID: {}\nName: {}\nDescription: {}", m.id, m.name, m.description);
-    if !m.extensions.is_empty() {
-        println!("Extensions: {}", m.extensions.join(", "));
-    }
     if !m.options.is_empty() {
         println!("Options:");
         for o in m.options {
-            println!("    {}: {} (default: {})", o.id, o.description, o.default);
+            println!("  {}: {} (default {})", o.id, o.description, show_default(o.default));
         }
     }
     Ok(())
+}
+
+/// A default as sigrok-cli prints it: numbers and booleans bare,
+/// anything else quoted.
+fn show_default(d: &str) -> String {
+    if d == "true" || d == "false" || d.parse::<f64>().is_ok() {
+        d.to_owned()
+    } else {
+        let escaped =
+            d.replace('\\', "\\\\").replace('\n', "\\n").replace('\r', "\\r").replace('\t', "\\t");
+        format!("'{escaped}'")
+    }
 }
 
 /// `-O module --show`.
@@ -66,13 +75,10 @@ pub fn output_detail(args: &Args) -> Result<()> {
     let m = oxrok_formats::output::find(&id)
         .ok_or_else(|| Error::Arg(format!("Unknown output module '{id}'.")))?;
     println!("ID: {}\nName: {}\nDescription: {}", m.id, m.name, m.description);
-    if !m.extensions.is_empty() {
-        println!("Extensions: {}", m.extensions.join(", "));
-    }
     if !m.options.is_empty() {
         println!("Options:");
         for o in m.options {
-            println!("    {}: {} (default: {:?})", o.id, o.description, o.default);
+            println!("  {}: {} (default {})", o.id, o.description, show_default(o.default));
         }
     }
     Ok(())

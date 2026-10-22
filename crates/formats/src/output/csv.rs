@@ -285,7 +285,10 @@ impl Csv {
                 if self.samplerate == 0 {
                     fields.push("0".to_owned());
                 } else {
-                    let t = self.out_samples as f64 / self.samplerate as f64 * self.scale as f64;
+                    // The first row is at time 0 (libsigrok 0.6; 0.5
+                    // started one period late).
+                    let t =
+                        (self.out_samples - 1) as f64 / self.samplerate as f64 * self.scale as f64;
                     fields.push(format!("{}", t as u64));
                 }
             }
@@ -412,7 +415,7 @@ mod tests {
         c.receive(&Packet::End, &mut out).unwrap();
         assert_eq!(
             String::from_utf8(out).unwrap(),
-            "microseconds,logic,logic,Trigger\n5,1,0,1\n10,0,1,0\n15,1,1,0\n"
+            "microseconds,logic,logic,Trigger\n0,1,0,1\n5,0,1,0\n10,1,1,0\n"
         );
     }
 
