@@ -97,6 +97,30 @@ pub struct Args {
     #[arg(long)]
     pub continuous: bool,
 
+    /// Protocol decoders to run: decoder[:option=value][:channel=NAME]...
+    #[arg(short = 'P', long = "protocol-decoders", value_name = "DECODERS")]
+    pub decoders: Vec<String>,
+
+    /// Annotations to show: decoder[=class[:class]...][,decoder...]
+    #[arg(short = 'A', long = "protocol-decoder-annotations", value_name = "ANN")]
+    pub decoder_annotations: Vec<String>,
+
+    /// Binary output to show: decoder=class
+    #[arg(short = 'B', long = "protocol-decoder-binary", value_name = "BIN")]
+    pub decoder_binary: Option<String>,
+
+    /// Decoder metadata to show: decoder[,decoder...]
+    #[arg(short = 'M', long = "protocol-decoder-meta", value_name = "META")]
+    pub decoder_meta: Vec<String>,
+
+    /// Show sample numbers with annotations
+    #[arg(long = "protocol-decoder-samplenum")]
+    pub decoder_samplenum: bool,
+
+    /// Show the annotation class with annotations
+    #[arg(long = "protocol-decoder-ann-class")]
+    pub decoder_ann_class: bool,
+
     /// Get device option only: [channel_group=GROUP:]key
     #[arg(long = "get", value_name = "KEY")]
     pub gets: Vec<String>,

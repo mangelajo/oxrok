@@ -73,6 +73,12 @@ release may change the library API.
   oxrok and diffs them, with `--hw` for the LogicPort and fx2lafw cases.
 - The demo device honours triggers through the software trigger.
 - `fx2lafw`: `probe_names` scan option and `limit_frames`.
+- `oxrok-decode`: the protocol decoder runtime (decoder API with
+  libsigrokdecode's `wait` semantics, instance threads, output
+  routing) and `oxrok-decoders` with a native `uart` decoder. The CLI
+  gains `-P`, `-A`, `-B`, `-M`, `--protocol-decoder-samplenum` and
+  `--protocol-decoder-ann-class`, `-P dec --show` and the decoder
+  section of `-L`. uart output is identical to sigrok-cli's.
 - `oxrok-driver-fx2lafw`: Saleae Logic clones, USBee, Cypress FX2 and
   sigrok FX2 LA boards, 8 or 16 channels, with the firmware upload and
   the software trigger. Verified on a Saleae Logic clone: firmware

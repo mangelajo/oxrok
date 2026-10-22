@@ -567,6 +567,8 @@ dependencies = [
  "ctrlc",
  "log",
  "oxrok-core",
+ "oxrok-decode",
+ "oxrok-decoders",
  "oxrok-driver-demo",
  "oxrok-driver-fx2lafw",
  "oxrok-driver-logicport",
@@ -580,6 +582,23 @@ version = "0.1.0"
 dependencies = [
  "log",
  "thiserror",
+]
+
+[[package]]
+name = "oxrok-decode"
+version = "0.1.0"
+dependencies = [
+ "log",
+ "oxrok-core",
+]
+
+[[package]]
+name = "oxrok-decoders"
+version = "0.1.0"
+dependencies = [
+ "log",
+ "oxrok-core",
+ "oxrok-decode",
 ]
 
 [[package]]

@@ -13,6 +13,7 @@
 //! module, feeds it packets, writes the text.
 
 use crate::args::Args;
+use crate::decode::Decoding;
 use crate::parse;
 use oxrok_core::{Channel, Error, Packet, Result};
 use oxrok_formats::output::{self, Options, Output, OutputContext};
@@ -23,8 +24,10 @@ const DEFAULT_OUTPUT_FILE: &str = "srzip";
 
 /// A running output pipeline.
 pub struct Pipeline {
-    main: Box<dyn Output>,
+    /// The output module; none when only decoders were asked for.
+    main: Option<Box<dyn Output>>,
     analog: Option<Box<dyn Output>>,
+    decoding: Option<Decoding>,
     sink: Option<Box<dyn Write>>,
     buf: Vec<u8>,
     wait_trigger: bool,
@@ -42,6 +45,21 @@ impl Pipeline {
         samplerate: Option<u64>,
         title: &str,
     ) -> Result<Self> {
+        let decoding = Decoding::from_args(args, channels, samplerate)?;
+        // With decoders and no output asked for, only annotations print.
+        if decoding.is_some() && args.output_format.is_none() && args.output_file.is_none() {
+            return Ok(Pipeline {
+                main: None,
+                analog: None,
+                decoding,
+                sink: Some(Box::new(std::io::stdout())),
+                buf: Vec::new(),
+                wait_trigger: args.wait_trigger,
+                triggered: false,
+                received_logic: 0,
+                received_analog: 0,
+            });
+        }
         let spec = args.output_format.clone().unwrap_or_else(|| {
             if args.output_file.is_some() { DEFAULT_OUTPUT_FILE } else { DEFAULT_OUTPUT_NOFILE }
                 .to_owned()
@@ -79,8 +97,9 @@ impl Pipeline {
             })
         };
         Ok(Pipeline {
-            main,
+            main: Some(main),
             analog,
+            decoding,
             sink,
             buf: Vec::new(),
             wait_trigger: args.wait_trigger,
@@ -101,8 +120,16 @@ impl Pipeline {
         if self.wait_trigger && !self.triggered && matches!(packet, Packet::Logic(_)) {
             return true;
         }
+        if let Some(d) = &mut self.decoding {
+            let mut stdout = std::io::stdout();
+            if let Err(e) = d.handle(packet, &mut stdout) {
+                log::error!("decoding: {e}");
+                return false;
+            }
+        }
         self.buf.clear();
-        match self.main.receive(packet, &mut self.buf) {
+        let Some(main) = &mut self.main else { return true };
+        match main.receive(packet, &mut self.buf) {
             Ok(()) => {}
             Err(e) => {
                 log::error!("output: {e}");

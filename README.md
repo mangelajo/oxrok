@@ -16,7 +16,8 @@ binary inputs, a USB transport (nusb or libusb) with record and replay,
 and two hardware drivers: the Intronix LogicPort LA1034, checked against
 the libsigrok driver byte for byte and against a signal generator on the
 bench, and fx2lafw for Saleae Logic clones and other FX2 boards, with
-the firmware upload. See `docs/ROADMAP.md`.
+the firmware upload. Protocol decoding has started with a native `uart`
+decoder whose output matches libsigrokdecode. See `docs/ROADMAP.md`.
 
 ```sh
 cargo install --path crates/cli
@@ -26,6 +27,7 @@ oxrok -d demo --show
 oxrok -d demo --samples 1k -o capture.sr      # a session file PulseView opens
 oxrok -i capture.sr -O csv
 oxrok -d intronix-logicport -c samplerate=100M -t D0=r --samples 2k -O vcd -o cap.vcd
+oxrok -i cap.vcd -P uart:baudrate=115200:rx=D0 -A uart=rx-data
 ```
 
 The output after the first header line matches sigrok-cli byte for byte
@@ -43,6 +45,8 @@ for the same command, which is how the test suite checks it.
 | `oxrok-ezusb` | Cypress FX2 firmware upload and renumeration |
 | `oxrok-driver-logicport` | Intronix LogicPort LA1034, see `docs/LOGICPORT.md` and `docs/DEVICES.md` |
 | `oxrok-driver-fx2lafw` | FX2 based analyzers running the sigrok fx2lafw firmware |
+| `oxrok-decode` | the decoder API, the sample scanner behind `wait`, instance threads |
+| `oxrok-decoders` | native decoders: `uart` so far |
 | `oxrok-hil` | hardware in the loop checks, not published |
 | `oxrok` | the command line tool |
 

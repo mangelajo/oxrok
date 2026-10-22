@@ -47,6 +47,10 @@ pub fn supported(registry: &Registry) {
     for m in oxrok_formats::output::modules() {
         println!("  {:<20} {}", m.id, m.description);
     }
+    println!("\nSupported protocol decoders:");
+    for d in crate::decode::registry().decoders() {
+        println!("  {:<20} {}", d.info.id, d.info.longname);
+    }
     println!();
 }
 

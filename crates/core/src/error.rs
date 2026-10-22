@@ -44,6 +44,9 @@ pub enum Error {
     /// A key the device does not have.
     #[error("unknown option: {0}")]
     UnknownKey(String),
+    /// The end of the input, e.g. of a decoder's sample stream.
+    #[error("end of data")]
+    Eof,
 }
 
 impl Error {

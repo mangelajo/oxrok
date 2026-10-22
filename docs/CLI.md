@@ -50,7 +50,8 @@ Deliberate, and kept small:
 
 ## Not available yet
 
-- `-P`, `-A`, `-B`, `-M` (protocol decoders): phase 6 of the roadmap.
+- Stacked decoders (`-P uart,midi`), Python decoders, the
+  `--protocol-decoder-jsontrace` output; `docs/DECODERS.md`.
 - `-T` (transform modules), `--list-supported-wiki`, the `gnuplot` and
   `scale` options of the `csv` output.
 - The `csv` input and the other long tail input modules (ChronoVu LA8,

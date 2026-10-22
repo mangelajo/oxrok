@@ -17,6 +17,7 @@
 #![forbid(unsafe_code)]
 
 mod args;
+mod decode;
 mod input;
 mod logger;
 mod parse;
@@ -65,6 +66,8 @@ fn main() -> ExitCode {
         show::input_detail(&args)
     } else if args.output_format.is_some() && args.show {
         show::output_detail(&args)
+    } else if !args.decoders.is_empty() && args.show {
+        decode::decoder_detail(&args)
     } else if args.scan {
         show::device_list(&registry, &args)
     } else if args.show {

@@ -36,17 +36,19 @@ strip_header() {
         | sed -E 's/^\$(date|version) .*/$\1 X $end/; s/^\$scope module (libsigrok|oxrok) /$scope module X /'
 }
 
-# case NAME [--keep-header] [--stderr] [--names] -- ARGS...
+# case NAME [--keep-header] [--stderr] [--names] [--filter SED] -- ARGS...
 #   --names compares only the words before a colon, for listings whose
-#   descriptions are worded differently.
+#   descriptions are worded differently; --filter applies a sed script
+#   to both outputs first.
 case_() {
     name=$1; shift
-    strip=1; which=stdout; names=0
+    strip=1; which=stdout; names=0; filter_expr=""
     while [ "$1" != "--" ]; do
         case "$1" in
             --keep-header) strip=0 ;;
             --stderr) which=stderr ;;
             --names) names=1 ;;
+            --filter) filter_expr=$2; shift ;;
         esac
         shift
     done
@@ -60,6 +62,10 @@ case_() {
         strip_header <"$TMP/a.out" >"$TMP/a.cmp"; strip_header <"$TMP/b.out" >"$TMP/b.cmp"
     else
         cp "$TMP/a.out" "$TMP/a.cmp"; cp "$TMP/b.out" "$TMP/b.cmp"
+    fi
+    if [ -n "$filter_expr" ]; then
+        sed -E "$filter_expr" "$TMP/a.cmp" >"$TMP/a.f"; mv "$TMP/a.f" "$TMP/a.cmp"
+        sed -E "$filter_expr" "$TMP/b.cmp" >"$TMP/b.f"; mv "$TMP/b.f" "$TMP/b.cmp"
     fi
     if [ $names = 1 ]; then
         sed -E 's/^([^:]*):.*/\1/' "$TMP/a.cmp" | grep -v -E '^  (gnuplot|scale)$' >"$TMP/a.n"; mv "$TMP/a.n" "$TMP/a.cmp"
@@ -123,6 +129,17 @@ case_ "vcd downsample" -- -i "$TMP/sr.vcd" -I vcd:downsample=4 -O bits
 "$SIGROK_CLI" -d $D8 -g Logic -c pattern=incremental --samples 64 -o "$TMP/raw.bin" -O binary 2>/dev/null
 case_ "binary input" -- -i "$TMP/raw.bin" -I binary:numchannels=8 -O hex
 case_ "file show" --keep-header -- -i "$TMP/sr.sr" --show
+
+# Protocol decoders on a synthetic UART capture.
+UART="$(dirname "$0")/../crates/cli/tests/fixtures/uart-hi.vcd"
+case_ "uart all annotations verbose" --keep-header -- -l 4 -i "$UART" -P uart:baudrate=115200
+case_ "uart rx-data" --keep-header -- -i "$UART" -P uart -A uart=rx-data
+case_ "uart ascii start and data" --keep-header -- -i "$UART" -P uart:format=ascii -A uart=rx-data:rx-start
+case_ "uart samplenum" --keep-header -- -i "$UART" -P uart -A uart=rx-data --protocol-decoder-samplenum
+case_ "uart binary" --keep-header -- -i "$UART" -P uart -B uart=rx
+# The documentation text is oxrok's own, and this libsigrokdecode build
+# predates decoder tags.
+case_ "decoder show uart" --keep-header --names --filter '/^Documentation:/,$d; /^Decoder tags:/,/^Annotation classes:/{/^- /d;}' -- -P uart --show
 
 if [ $hw = 1 ]; then
     LP="intronix-logicport"

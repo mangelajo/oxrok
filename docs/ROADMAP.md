@@ -8,6 +8,6 @@
 | 3 | Intronix LogicPort driver, bench crate, replay fixture | done 2026-10-22: 35 bench checks pass, `bits` and `csv` match libsigrok byte for byte, two recordings replay in CI, `docs/DRIVER_PORTING.md` |
 | 4 | EZ-USB upload, software trigger, fx2lafw driver | done 2026-10-22 on a Saleae Logic clone: firmware upload and renumeration, 60 s at 24 MS/s without a missing byte (1.6 s CPU, 25 MB), `--show` identical to sigrok-cli, continuous mode stopped by Ctrl-C, a recording replays in CI |
 | 5 | CLI parity pass and the differential script | done 2026-10-22: `tools/diffcli.sh` runs 29 software and 8 hardware cases against sigrok-cli 0.8.0-git, all clean; module listings compared by option name |
-| 6 | decoder runtime, native uart, i2c, spi, Python decoder host, conformance fixtures | annotations identical to libsigrokdecode on the fixtures |
+| 6 | decoder runtime, native uart, i2c, spi, Python decoder host, conformance fixtures | in progress: runtime and uart done 2026-10-22 (identical to sigrok-cli); spike chose PyO3; i2c, spi, stacking, Python host and more fixtures pending |
 | 7 | packaging: static binaries, Homebrew, AUR, udev rules | a clean machine installs and captures without any sigrok package |
 | 8 | release 0.1 | tags, changelog, guides |
