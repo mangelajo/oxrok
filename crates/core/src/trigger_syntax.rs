@@ -124,12 +124,11 @@ fn parse_range(
     }
     let (inside, values) =
         if let Some(rest) = rhs.strip_prefix('!') { (false, rest) } else { (true, rhs) };
-    let (low, high) = match values.split_once("..") {
-        Some((lo, hi)) => (number(lo)?, number(hi)?),
-        None => {
-            let v = number(values)?;
-            (v, v)
-        }
+    let (low, high) = if let Some((lo, hi)) = values.split_once("..") {
+        (number(lo)?, number(hi)?)
+    } else {
+        let v = number(values)?;
+        (v, v)
     };
     Some(TriggerRange { channels: (a..=b).collect(), low, high, inside })
 }
@@ -138,10 +137,8 @@ fn parse_range(
 /// text is malformed.
 fn apply_modifier(trigger: &mut Trigger, stage: usize, text: &str, samplerate: u64) -> Option<()> {
     if let Some(rest) = text.strip_prefix('*') {
-        let (digits, consecutive) = match rest.strip_suffix('c') {
-            Some(d) => (d, true),
-            None => (rest, false),
-        };
+        let (digits, consecutive) =
+            if let Some(d) = rest.strip_suffix('c') { (d, true) } else { (rest, false) };
         let count: u32 = digits.parse().ok()?;
         trigger.set_count(stage, TriggerCount { count, consecutive });
         return Some(());

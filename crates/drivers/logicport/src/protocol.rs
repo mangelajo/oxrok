@@ -69,6 +69,13 @@ const TRIG_CONSECUTIVE: u32 = 0x18;
 const TRIG_PREQUALIFY: u32 = 0x19;
 const TRIG_RISING_MASK: u32 = 0x29;
 const TRIG_FALLING_MASK: u32 = 0x2e;
+/// Value term: 1 = channel k weighs 2^k.
+const TRIG_VALUE_ORDER: u32 = 0x12;
+/// Value term: the group's channels, low bound and high bound, the
+/// bounds scattered onto the group's channel bits.
+const TRIG_VALUE_MASK: u32 = 0x1a;
+const TRIG_VALUE_LOW: u32 = 0x1f;
+const TRIG_VALUE_HIGH: u32 = 0x24;
 
 /// Sample clocking and channel configuration.
 const REG_CLOCK_MODE: u32 = 0x0100_0000;
@@ -77,6 +84,15 @@ const REG_CHANNEL_CFG: u32 = 0x0100_0001;
 const REG_COMPRESSION: u32 = 0x0100_0002;
 const REG_COMPRESSION_MASK: u32 = 0x0100_0003;
 const REG_INVERT_MASK: u32 = 0x0100_0008;
+/// Forces the trigger (write 1). Documented, unused.
+#[allow(dead_code)]
+const REG_FORCE_TRIGGER: u32 = 0x0010_000c;
+/// Frequency counter: write the input to select, read 0 when a
+/// measurement is ready. The value follows in units of 10 Hz.
+const REG_FREQ_SELECT: u32 = 0x4000_0000;
+const REG_FREQ_VALUE: u32 = 0x4000_0001;
+const FREQ_POLL: Duration = Duration::from_millis(30);
+const FREQ_POLLS: usize = 40;
 
 /// Sample memory.
 const REG_WRITE_PTR: u32 = 0x0200_0000;
@@ -108,10 +124,35 @@ const CLOCK_MODE_CLK1: u8 = 1 << 2;
 const CLOCK_MODE_CLK2: u8 = 1 << 1;
 const CLOCK_MODE_FALLING: u8 = 1 << 0;
 const CLOCK_MODE_NO_QUAL: u8 = 1 << 4;
+const CLOCK_MODE_QUAL_LOW: u8 = 1 << 3;
 
+/// Condition select: pattern code in bits 0-1, value code in bits 2-4.
 const COND_PATTERN_TRUE: u8 = 1;
+#[allow(dead_code)]
+const COND_PATTERN_FALSE: u8 = 2;
+const COND_VALUE_INSIDE: u8 = 0x0c;
+const COND_VALUE_OUTSIDE: u8 = 0x10;
+/// Counter event source.
+const COUNTER_SRC_CLOCK: u8 = 0;
+const COUNTER_SRC_ENTERED: u8 = 1;
 const COUNTER_SRC_EDGE: u8 = 3;
+/// Counter compare mode.
 const COUNTER_MODE_OCCURRENCE: u8 = 1;
+const COUNTER_MODE_DURATION: u8 = 2;
+/// The counters are 20 bits wide.
+pub const COUNTER_MAX: u64 = 0xf_ffff;
+/// Trigger combine: no trigger.
+pub const COMBINE_NONE: u8 = 0;
+/// Trigger combine: level A alone (2 is level B alone).
+pub const COMBINE_A: u8 = 1;
+/// Trigger combine: level A or level B.
+pub const COMBINE_A_OR_B: u8 = 3;
+/// Trigger combine: level A and level B, in any order.
+pub const COMBINE_A_AND_B: u8 = 4;
+/// Trigger combine: level A, then level B.
+pub const COMBINE_A_THEN_B: u8 = 5;
+/// Frequency counter input codes beyond D0..D31.
+const FREQ_INPUT_CLK1: u8 = 0x20;
 
 /// The threshold DAC output settles with a time constant of about 30 ms
 /// (measured); a full scale step needs about 165 ms to get within 50 mV.
@@ -181,27 +222,90 @@ pub struct TriggerLevel {
     pub rising_mask: u64,
     /// Channels whose falling edge counts.
     pub falling_mask: u64,
-    /// Pattern true / false / unused.
+    /// Channels of the value term.
+    pub value_mask: u64,
+    /// Its low bound, scattered onto the group's channel bits.
+    pub value_low: u64,
+    /// Its high bound, scattered the same way.
+    pub value_high: u64,
+    /// True to match inside the bounds, false outside.
+    pub value_inside: bool,
+    /// Pattern true / false / unused, plus the value code.
     pub condition: u8,
     /// Event counted, e.g. edges.
     pub counter_source: u8,
     /// How the count is evaluated.
     pub counter_mode: u8,
+    /// Counter high bound: the occurrence count minus one.
+    pub count_high: u32,
+    /// Counter low bound: the duration in ticks.
+    pub count_low: u32,
+    /// Consecutive instead of cumulative counting.
+    pub consecutive: bool,
 }
 
 impl TriggerLevel {
-    /// Fills the derived fields once the masks are set.
-    pub fn finish(&mut self) {
+    /// Fills the derived fields once the masks are set. `count` is an
+    /// occurrence count with its consecutive flag, `duration` a number
+    /// of counter ticks the condition must exceed; at most one applies.
+    pub fn finish(&mut self, count: Option<(u32, bool)>, duration: Option<u32>) {
         if self.pattern_mask != 0 {
             self.condition = COND_PATTERN_TRUE;
         }
-        if self.rising_mask != 0 || self.falling_mask != 0 {
+        if self.value_mask != 0 {
+            self.condition |=
+                if self.value_inside { COND_VALUE_INSIDE } else { COND_VALUE_OUTSIDE };
+        }
+        let edges = self.rising_mask != 0 || self.falling_mask != 0;
+        if edges {
             self.counter_source = COUNTER_SRC_EDGE;
+        }
+        if let Some(ticks) = duration {
+            self.counter_source = COUNTER_SRC_CLOCK;
+            self.counter_mode = COUNTER_MODE_DURATION;
+            self.count_low = ticks;
+            return;
+        }
+        if let Some((n, consecutive)) = count {
+            self.count_high = n.saturating_sub(1);
+            self.consecutive = consecutive;
+            if !edges {
+                self.counter_source = COUNTER_SRC_ENTERED;
+            }
         }
         if self.condition != 0 || self.counter_source != 0 {
             self.counter_mode = COUNTER_MODE_OCCURRENCE;
         }
     }
+
+    /// True when the level uses the duration counter.
+    pub fn is_duration(&self) -> bool {
+        self.counter_mode == COUNTER_MODE_DURATION
+    }
+}
+
+/// The state mode clock qualifier.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Qualifier {
+    /// Every clock edge samples.
+    #[default]
+    Off,
+    /// Only edges while the qualifier input is high.
+    ActiveHigh,
+    /// Only edges while the qualifier input is low.
+    ActiveLow,
+}
+
+/// When state mode samples the inputs relative to the clock edge.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum SamplePoint {
+    /// On the edge.
+    #[default]
+    On,
+    /// 2.5 ns before the edge.
+    Before,
+    /// 2.5 ns after the edge.
+    After,
 }
 
 /// Everything `program` writes to the device.
@@ -215,6 +319,12 @@ pub struct Program {
     pub clock_source: usize,
     /// 0: rising, 1: falling.
     pub clock_edge: usize,
+    /// The state mode qualifier.
+    pub qualifier: Qualifier,
+    /// The state mode sample point.
+    pub sample_point: SamplePoint,
+    /// Inputs the trigger sees inverted; the readout inverts the data.
+    pub invert_mask: u64,
     /// Run length compression.
     pub rle: bool,
     /// Channels whose changes start a new RLE entry.
@@ -225,20 +335,38 @@ pub struct Program {
     pub threshold: f64,
     /// The two trigger levels.
     pub trigger: [TriggerLevel; 2],
-    /// 0: none, 1: level A, 5: A then B.
+    /// One of the `COMBINE_*` codes.
     pub trigger_combine: u8,
 }
 
 impl Program {
-    /// The FPGA image the settings need.
+    /// The FPGA image the settings need. The images that sample before
+    /// the edge are specific to the clock input and its effective edge,
+    /// the selected edge inverted when the clock input is inverted.
     pub fn image(&self) -> Image {
-        if self.external_clock {
-            Image::StateOn
-        } else if self.rate.ddr {
-            Image::TimingDdr
-        } else {
-            Image::TimingSdr
+        if !self.external_clock {
+            return if self.rate.ddr { Image::TimingDdr } else { Image::TimingSdr };
         }
+        match self.sample_point {
+            SamplePoint::On => Image::StateOn,
+            SamplePoint::After => Image::StateAfter,
+            SamplePoint::Before => {
+                let inverted = self.invert_mask >> (32 + self.clock_source) & 1 != 0;
+                match (self.clock_source, (self.clock_edge == 1) != inverted) {
+                    (0, false) => Image::StateBeforeClk1Rise,
+                    (0, true) => Image::StateBeforeClk1Fall,
+                    (_, false) => Image::StateBeforeClk2Rise,
+                    (_, true) => Image::StateBeforeClk2Fall,
+                }
+            }
+        }
+    }
+
+    /// Extra samples between the trigger condition and the record the
+    /// FPGA marks, beyond the usual pipeline delay. A duration trigger
+    /// lands two samples late.
+    pub fn trigger_delay_extra(&self) -> u64 {
+        if self.trigger.iter().any(TriggerLevel::is_duration) { 2 } else { 0 }
     }
 
     /// True when DDR readout applies.
@@ -284,8 +412,12 @@ pub fn buffer_split(ratio: u64, ddr: bool) -> (u16, u16) {
 pub fn program_regs(p: &Program, cal: i32) -> Vec<(u32, usize, u64)> {
     let mut q: Vec<(u32, usize, u64)> = Vec::with_capacity(48);
     let mode = if p.external_clock {
-        CLOCK_MODE_NO_QUAL
-            | if p.clock_source == 1 { CLOCK_MODE_CLK2 } else { CLOCK_MODE_CLK1 }
+        let qual = match p.qualifier {
+            Qualifier::Off => CLOCK_MODE_NO_QUAL,
+            Qualifier::ActiveHigh => 0,
+            Qualifier::ActiveLow => CLOCK_MODE_QUAL_LOW,
+        };
+        qual | if p.clock_source == 1 { CLOCK_MODE_CLK2 } else { CLOCK_MODE_CLK1 }
             | if p.clock_edge == 1 { CLOCK_MODE_FALLING } else { 0 }
     } else {
         q.push((REG_PRESCALER, 1, u64::from(p.rate.prescaler)));
@@ -298,7 +430,7 @@ pub fn program_regs(p: &Program, cal: i32) -> Vec<(u32, usize, u64)> {
     // changes on channels outside the mask don't start a new RLE entry,
     // so disabled (e.g. floating) inputs don't fill the sample memory.
     q.push((REG_COMPRESSION_MASK, 5, p.compression_mask));
-    q.push((REG_INVERT_MASK, 5, 0));
+    q.push((REG_INVERT_MASK, 5, p.invert_mask));
     q.push((REG_COMPRESSION, 1, u64::from(p.rle)));
     q.push((REG_CHANNEL_CFG, 1, 0));
     q.push((REG_RUN, 1, 0));
@@ -310,11 +442,17 @@ pub fn program_regs(p: &Program, cal: i32) -> Vec<(u32, usize, u64)> {
         q.push((base + TRIG_PATTERN_VALUE, 5, level.pattern_value));
         q.push((base + TRIG_RISING_MASK, 5, level.rising_mask));
         q.push((base + TRIG_FALLING_MASK, 5, level.falling_mask));
-        q.push((base + TRIG_CONSECUTIVE, 1, 0));
+        if level.value_mask != 0 {
+            q.push((base + TRIG_VALUE_ORDER, 1, 1));
+            q.push((base + TRIG_VALUE_MASK, 5, level.value_mask));
+            q.push((base + TRIG_VALUE_LOW, 5, level.value_low));
+            q.push((base + TRIG_VALUE_HIGH, 5, level.value_high));
+        }
+        q.push((base + TRIG_CONSECUTIVE, 1, u64::from(level.consecutive)));
         q.push((base + TRIG_PREQUALIFY, 1, 0));
-        q.push((base + TRIG_COUNT_LOW, 4, 0));
-        // Occurrence count minus one: fire on the first event.
-        q.push((base + TRIG_COUNT_HIGH, 4, 0));
+        q.push((base + TRIG_COUNT_LOW, 4, u64::from(level.count_low)));
+        // Occurrence count minus one: 0 fires on the first event.
+        q.push((base + TRIG_COUNT_HIGH, 4, u64::from(level.count_high)));
         q.push((base + TRIG_CONDITION, 1, u64::from(level.condition)));
         q.push((base + TRIG_COUNTER_SOURCE, 1, u64::from(level.counter_source)));
         q.push((base + TRIG_COUNTER_MODE, 1, u64::from(level.counter_mode)));
@@ -757,19 +895,55 @@ impl Link {
     /// Writes all acquisition settings.
     pub fn program(&mut self, p: &Program) -> Result<()> {
         let regs = program_regs(p, self.threshold_cal);
-        let mut dac = None;
         for (addr, width, value) in regs {
             if addr == REG_THRESHOLD {
-                dac = Some(value as u16);
+                self.set_threshold_dac(value as u16)?;
+            } else {
+                self.reg_write(addr, &value.to_le_bytes()[..width])?;
             }
-            self.reg_write(addr, &value.to_le_bytes()[..width])?;
-        }
-        if dac.is_some() && dac != self.threshold_dac {
-            log::debug!("Waiting for the threshold DAC ({}) to settle.", dac.unwrap_or(0));
-            std::thread::sleep(THRESHOLD_SETTLE);
-            self.threshold_dac = dac;
         }
         Ok(())
+    }
+
+    /// Writes the threshold DAC and waits for it to settle when the
+    /// value changed.
+    fn set_threshold_dac(&mut self, dac: u16) -> Result<()> {
+        self.reg_write(REG_THRESHOLD, &dac.to_le_bytes())?;
+        if self.threshold_dac != Some(dac) {
+            log::debug!("Waiting for the threshold DAC ({dac}) to settle.");
+            std::thread::sleep(THRESHOLD_SETTLE);
+            self.threshold_dac = Some(dac);
+        }
+        Ok(())
+    }
+
+    /// Sets the input threshold in volts.
+    pub fn set_threshold(&mut self, volts: f64) -> Result<()> {
+        self.set_threshold_dac(threshold_dac(volts, self.threshold_cal))
+    }
+
+    /// Measures the frequency on input `channel` (0-31 for D0..D31, 32
+    /// and 33 for the clocks) in Hz, to 10 Hz. The counter free runs: a
+    /// reading taken right after selecting the input can still be the
+    /// previous input's, so the second settled reading is returned.
+    pub fn measure_frequency(&mut self, channel: usize) -> Result<u64> {
+        let select =
+            if channel < 32 { channel as u8 } else { FREQ_INPUT_CLK1 + (channel as u8 - 32) };
+        self.reg_write_u8(REG_FREQ_SELECT, select)?;
+        let mut readings = 0;
+        for _ in 0..FREQ_POLLS {
+            std::thread::sleep(FREQ_POLL);
+            if self.reg_read_u8(REG_FREQ_SELECT)? != 0 {
+                continue;
+            }
+            let d = self.reg_read(REG_FREQ_VALUE, 4)?;
+            let value = u64::from(u32::from_le_bytes([d[0], d[1], d[2], d[3]])) * 10;
+            readings += 1;
+            if readings == 2 {
+                return Ok(value);
+            }
+        }
+        Err(Error::Timeout)
     }
 
     /// Arms the capture.
@@ -905,18 +1079,11 @@ mod tests {
     #[test]
     fn program_order_and_values() {
         let mut level = TriggerLevel { pattern_mask: 1, pattern_value: 1, ..Default::default() };
-        level.finish();
+        level.finish(None, None);
         let p = Program {
-            rate: *find_rate(1_000_000).unwrap(),
-            external_clock: false,
-            clock_source: 0,
-            clock_edge: 0,
-            rle: true,
-            compression_mask: 0x3_ffff_ffff,
-            capture_ratio: 50,
-            threshold: 1.5,
             trigger: [level, TriggerLevel::default()],
-            trigger_combine: 1,
+            trigger_combine: COMBINE_A,
+            ..program()
         };
         let regs = program_regs(&p, 0);
         assert_eq!(regs[0], (REG_PRESCALER, 1, 0x31));
@@ -933,5 +1100,159 @@ mod tests {
         assert_eq!(regs[n - 1], (REG_POST_DEPTH, 2, 1016));
         assert_eq!(p.image(), Image::TimingSdr);
         assert!(!regs.iter().any(|r| r.0 == REG_CONFIG_CTRL && r.2 != 0));
+    }
+
+    /// The default program at 1 MHz with RLE, as the replay fixtures
+    /// were recorded.
+    fn program() -> Program {
+        Program {
+            rate: *find_rate(1_000_000).unwrap(),
+            external_clock: false,
+            clock_source: 0,
+            clock_edge: 0,
+            qualifier: Qualifier::Off,
+            sample_point: SamplePoint::On,
+            invert_mask: 0,
+            rle: true,
+            compression_mask: 0x3_ffff_ffff,
+            capture_ratio: 50,
+            threshold: 1.5,
+            trigger: [TriggerLevel::default(); 2],
+            trigger_combine: COMBINE_NONE,
+        }
+    }
+
+    fn lookup(regs: &[(u32, usize, u64)], addr: u32) -> Option<u64> {
+        regs.iter().find(|r| r.0 == addr).map(|r| r.2)
+    }
+
+    /// The register stream without trigger terms must not change: the
+    /// replay fixtures depend on it.
+    #[test]
+    fn default_program_snapshot() {
+        let regs = program_regs(&program(), 0);
+        let a = REG_TRIGGER_LEVEL_A;
+        let b = REG_TRIGGER_LEVEL_B;
+        let level = |base: u32| {
+            vec![
+                (base + TRIG_PATTERN_MASK, 5, 0),
+                (base + TRIG_PATTERN_VALUE, 5, 0),
+                (base + TRIG_RISING_MASK, 5, 0),
+                (base + TRIG_FALLING_MASK, 5, 0),
+                (base + TRIG_CONSECUTIVE, 1, 0),
+                (base + TRIG_PREQUALIFY, 1, 0),
+                (base + TRIG_COUNT_LOW, 4, 0),
+                (base + TRIG_COUNT_HIGH, 4, 0),
+                (base + TRIG_CONDITION, 1, 0),
+                (base + TRIG_COUNTER_SOURCE, 1, 0),
+                (base + TRIG_COUNTER_MODE, 1, 0),
+            ]
+        };
+        let mut want = vec![
+            (REG_PRESCALER, 1, 0x31),
+            (REG_STEP, 1, 0),
+            (REG_CLOCK_MODE, 1, 0x14),
+            (REG_COMPRESSION, 1, 0),
+            (REG_COMPRESSION_MASK, 5, 0x3_ffff_ffff),
+            (REG_INVERT_MASK, 5, 0),
+            (REG_COMPRESSION, 1, 1),
+            (REG_CHANNEL_CFG, 1, 0),
+            (REG_RUN, 1, 0),
+            (REG_ARM, 1, 1),
+        ];
+        want.extend(level(a));
+        want.extend(level(b));
+        want.extend([
+            (REG_TRIGGER_COMBINE, 1, 0),
+            (REG_THRESHOLD, 2, 578),
+            (REG_PRE_DEPTH, 2, 1032),
+            (REG_POST_DEPTH, 2, 1016),
+        ]);
+        assert_eq!(regs, want);
+    }
+
+    #[test]
+    fn trigger_terms() {
+        let a = REG_TRIGGER_LEVEL_A;
+        // The fifth rising edge of D0 in a row.
+        let mut l = TriggerLevel { rising_mask: 1, ..Default::default() };
+        l.finish(Some((5, true)), None);
+        let regs = program_regs(&Program { trigger: [l, TriggerLevel::default()], ..program() }, 0);
+        assert_eq!(lookup(&regs, a + TRIG_COUNT_HIGH), Some(4));
+        assert_eq!(lookup(&regs, a + TRIG_CONSECUTIVE), Some(1));
+        assert_eq!(lookup(&regs, a + TRIG_COUNTER_SOURCE), Some(3));
+        assert_eq!(lookup(&regs, a + TRIG_COUNTER_MODE), Some(1));
+        assert_eq!(lookup(&regs, a + TRIG_VALUE_MASK), None);
+        // D1 high entered twice (level only: the entered event counts).
+        let mut l = TriggerLevel { pattern_mask: 2, pattern_value: 2, ..Default::default() };
+        l.finish(Some((2, false)), None);
+        assert_eq!((l.counter_source, l.count_high, l.condition), (1, 1, 1));
+        // D0 high for more than 100 ticks.
+        let mut l = TriggerLevel { pattern_mask: 1, pattern_value: 1, ..Default::default() };
+        l.finish(None, Some(100));
+        let p = Program { trigger: [l, TriggerLevel::default()], ..program() };
+        let regs = program_regs(&p, 0);
+        assert_eq!(lookup(&regs, a + TRIG_COUNT_LOW), Some(100));
+        assert_eq!(lookup(&regs, a + TRIG_COUNTER_SOURCE), Some(0));
+        assert_eq!(lookup(&regs, a + TRIG_COUNTER_MODE), Some(2));
+        assert_eq!(p.trigger_delay_extra(), 2);
+        // D0-D2 within 3..5, combined with level B by or.
+        let mut l = TriggerLevel {
+            value_mask: 7,
+            value_low: 3,
+            value_high: 5,
+            value_inside: true,
+            ..Default::default()
+        };
+        l.finish(None, None);
+        let p = Program {
+            trigger: [l, TriggerLevel::default()],
+            trigger_combine: COMBINE_A_OR_B,
+            ..program()
+        };
+        let regs = program_regs(&p, 0);
+        assert_eq!(lookup(&regs, a + TRIG_VALUE_ORDER), Some(1));
+        assert_eq!(lookup(&regs, a + TRIG_VALUE_MASK), Some(7));
+        assert_eq!(lookup(&regs, a + TRIG_VALUE_LOW), Some(3));
+        assert_eq!(lookup(&regs, a + TRIG_VALUE_HIGH), Some(5));
+        assert_eq!(lookup(&regs, a + TRIG_CONDITION), Some(0x0c));
+        assert_eq!(lookup(&regs, a + TRIG_COUNTER_MODE), Some(1));
+        assert_eq!(lookup(&regs, REG_TRIGGER_COMBINE), Some(3));
+        let pos = |addr| regs.iter().position(|r| r.0 == addr).unwrap();
+        assert!(pos(a + TRIG_FALLING_MASK) < pos(a + TRIG_VALUE_ORDER));
+        assert!(pos(a + TRIG_VALUE_HIGH) < pos(a + TRIG_CONSECUTIVE));
+        l.value_inside = false;
+        l.condition = 0;
+        l.finish(None, None);
+        assert_eq!(l.condition, 0x10);
+    }
+
+    #[test]
+    fn qualifier_bits_and_images() {
+        let mut p = Program { external_clock: true, ..program() };
+        let mode = |p: &Program| lookup(&program_regs(p, 0), REG_CLOCK_MODE).unwrap();
+        assert_eq!(mode(&p), 0x14);
+        p.qualifier = Qualifier::ActiveHigh;
+        assert_eq!(mode(&p), 0x04);
+        p.qualifier = Qualifier::ActiveLow;
+        assert_eq!(mode(&p), 0x0c);
+        p.clock_source = 1;
+        p.clock_edge = 1;
+        assert_eq!(mode(&p), 0x0b);
+        assert_eq!(p.image(), Image::StateOn);
+        p.sample_point = SamplePoint::After;
+        assert_eq!(p.image(), Image::StateAfter);
+        p.sample_point = SamplePoint::Before;
+        assert_eq!(p.image(), Image::StateBeforeClk2Fall);
+        p.invert_mask = 1 << 33;
+        assert_eq!(p.image(), Image::StateBeforeClk2Rise);
+        p.clock_source = 0;
+        p.clock_edge = 0;
+        assert_eq!(p.image(), Image::StateBeforeClk1Rise);
+        p.invert_mask = 1 << 32;
+        assert_eq!(p.image(), Image::StateBeforeClk1Fall);
+        p.external_clock = false;
+        assert_eq!(p.image(), Image::TimingSdr);
+        assert_eq!(p.trigger_delay_extra(), 0);
     }
 }

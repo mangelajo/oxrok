@@ -163,7 +163,8 @@ pub struct SdrCapture {
 impl SdrCapture {
     /// Decodes the capture into `sink`. `triggered` says whether a
     /// trigger was armed, else the trigger position is meaningless.
-    pub fn decode(&self, sink: &mut Sink<'_>, triggered: bool) {
+    /// `extra_delay` is the trigger mode's delay beyond the pipeline's.
+    pub fn decode(&self, sink: &mut Sink<'_>, triggered: bool, extra_delay: u64) {
         let rows = &self.rows;
         let n = rows.len();
         let trigger_pos = usize::from(self.trigger_pos).min(MEM_DEPTH - 1);
@@ -180,7 +181,7 @@ impl SdrCapture {
                 ts += rows.count_record(i);
             }
         }
-        let trigger_ts = ts.saturating_sub(TRIGGER_DELAY_SDR);
+        let trigger_ts = ts.saturating_sub(TRIGGER_DELAY_SDR + extra_delay);
         sink.set_trigger(triggered.then_some(trigger_ts), rows.total_samples());
 
         let mut prev = 0u64;
@@ -217,15 +218,15 @@ pub struct DdrCapture {
 }
 
 impl DdrCapture {
-    /// Decodes the capture into `sink`.
-    pub fn decode(&self, sink: &mut Sink<'_>, triggered: bool) {
+    /// Decodes the capture into `sink`; see [`SdrCapture::decode`].
+    pub fn decode(&self, sink: &mut Sink<'_>, triggered: bool, extra_delay: u64) {
         let n = self.n as i64;
         // Empirical pipeline delay, accurate to about two samples.
         let mut trigger_idx = (n + 1 - i64::from(self.trigger_pos)) % (n + 1);
         if trigger_idx < 0 {
             trigger_idx += n + 1;
         }
-        let trigger_idx = (trigger_idx - TRIGGER_DELAY_DDR).clamp(0, n - 1);
+        let trigger_idx = (trigger_idx - TRIGGER_DELAY_DDR - extra_delay as i64).clamp(0, n - 1);
         sink.set_trigger(triggered.then_some(trigger_idx as u64), self.n as u64);
         for i in 0..self.n {
             let value = if i & 1 == 1 {
@@ -300,7 +301,7 @@ mod tests {
         let cap = SdrCapture { rows, trigger_pos: 0 };
         let mut c = Collect::default();
         let mut sink = Sink::new(&mut c, 0, 50);
-        cap.decode(&mut sink, false);
+        cap.decode(&mut sink, false, 0);
         assert_eq!(c.samples, [1, 1, 1, 1, 2 | 1 << 32]);
         assert_eq!(c.trigger, None);
     }
@@ -312,13 +313,18 @@ mod tests {
         // trigger_idx = (101 - 30) % 101 = 71 -> 70; ts 70 - 7 = 63.
         let mut c = Collect::default();
         let mut sink = Sink::new(&mut c, 0, 50);
-        cap.decode(&mut sink, true);
+        cap.decode(&mut sink, true, 0);
         assert_eq!(c.samples.len(), 100);
         assert_eq!(c.trigger, Some(63));
+        // A duration trigger lands two samples later.
+        let mut c = Collect::default();
+        let mut sink = Sink::new(&mut c, 0, 50);
+        cap.decode(&mut sink, true, 2);
+        assert_eq!(c.trigger, Some(61));
         // A 20 sample limit at 25 % keeps 5 samples before the trigger.
         let mut c = Collect::default();
         let mut sink = Sink::new(&mut c, 20, 25);
-        cap.decode(&mut sink, true);
+        cap.decode(&mut sink, true, 0);
         assert_eq!(c.samples.len(), 20);
         assert_eq!(c.trigger, Some(5));
         assert_eq!(c.samples[5], 63);
@@ -335,7 +341,7 @@ mod tests {
         let cap = DdrCapture { bank_a: a, bank_b: b, n: 5, trigger_pos: 0 };
         let mut c = Collect::default();
         let mut sink = Sink::new(&mut c, 0, 50);
-        cap.decode(&mut sink, true);
+        cap.decode(&mut sink, true, 0);
         assert_eq!(c.samples, [0x10, 0x20, 0x30, 0x40 | 1 << 32, 0x50]);
         // trigger_idx = (6 - 0) % 6 = 0 -> clamp(0 - 21) = 0.
         assert_eq!(c.trigger, Some(0));
