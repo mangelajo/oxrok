@@ -3,6 +3,8 @@ resolver = "3"
 members = [
     "crates/core",
     "crates/formats",
+    "crates/usb",
+    "crates/ftdi",
     "crates/drivers/demo",
     "crates/cli",
 ]
@@ -18,6 +20,8 @@ authors = ["Miguel Angel Ajo <mangel.ajo@gmail.com>"]
 [workspace.dependencies]
 oxrok-core = { path = "crates/core", version = "0.1.0" }
 oxrok-formats = { path = "crates/formats", version = "0.1.0" }
+oxrok-usb = { path = "crates/usb", version = "0.1.0", default-features = false }
+oxrok-ftdi = { path = "crates/ftdi", version = "0.1.0" }
 oxrok-driver-demo = { path = "crates/drivers/demo", version = "0.1.0" }
 log = "0.4"
 thiserror = "2"

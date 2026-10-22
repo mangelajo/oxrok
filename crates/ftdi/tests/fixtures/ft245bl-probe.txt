@@ -1,0 +1,18 @@
+# oxrok usb fixture 1
+device vid=0403 pid=dc48 version=0400 bus=0 addr=1 manufacturer="Intronix" product="LogicPort Logic Analyzer" serial="00000000"
+claim 0 -> ok
+mps 81 -> 64
+ctl_out 40 00 0000 0000 - -> ok
+ctl_out 40 09 0004 0000 - -> ok
+ctl_in 40 0a 0000 0000 1 -> 04
+ctl_out 40 03 4006 0000 - -> ok
+ctl_in 40 0c 0000 0000 1 -> 18
+ctl_in 40 90 0000 0000 2 -> 0000
+ctl_in 40 90 0000 0001 2 -> 0304
+ctl_in 40 05 0000 0000 2 -> 3160
+ctl_out 40 0b 0100 0000 - -> ok
+ctl_out 40 0b 0000 0000 - -> ok
+bulk_out 02 0102030405 -> 5
+bulk_in 81 4096 -> 3160aabb3160cc
+bulk_in 81 4096 -> err timeout
+ctl_out 40 00 0002 0000 - -> ok

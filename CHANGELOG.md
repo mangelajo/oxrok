@@ -34,3 +34,11 @@ release may change the library API.
   `-O module --show` describe a module.
 - `--strict`: warnings fail the run. File inputs stop at the first
   chunk that warned.
+- `oxrok-usb`: the `Transport` trait with a nusb backend (default) and
+  a libusb backend (`libusb` feature, `OXROK_USB_BACKEND` to choose at
+  run time), device enumeration with `bus.address` matching, and a
+  text fixture format with `Recorder` and `Replay` transports.
+- `oxrok-ftdi`: FT232/FT245 vendor requests, baud rate encoding per
+  AN_120, bit modes, pin and EEPROM reads, status byte stripping; a
+  `probe` example that records a session. Verified on a LogicPort with
+  both backends on macOS; the recording is a replay test.

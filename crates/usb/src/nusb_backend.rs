@@ -1,0 +1,271 @@
+//! The `nusb` backend.
+
+use crate::{ControlRequest, Handle, Result, Transport, UsbDeviceInfo};
+use nusb::MaybeFuture;
+use nusb::transfer::{Buffer, Bulk, ControlIn, ControlOut, ControlType, In, Out, Recipient};
+use oxrok_core::Error;
+use std::collections::HashMap;
+use std::time::Duration;
+
+fn map(e: &nusb::Error, what: &str) -> Error {
+    use nusb::ErrorKind as K;
+    match e.kind() {
+        K::Busy => Error::Busy,
+        K::Disconnected => Error::device(format!("{what}: device disconnected")),
+        K::PermissionDenied => Error::Io(std::io::Error::new(
+            std::io::ErrorKind::PermissionDenied,
+            format!("{what}: {e} (permission denied)"),
+        )),
+        K::Unsupported => Error::NotSupported(format!("{what}: {e}")),
+        _ => Error::Device(format!("{what}: {e}")),
+    }
+}
+
+pub(crate) fn list() -> Result<Vec<UsbDeviceInfo>> {
+    let devices = nusb::list_devices().wait().map_err(|e| map(&e, "usb"))?;
+    Ok(devices.map(|d| info(&d)).collect())
+}
+
+fn info(d: &nusb::DeviceInfo) -> UsbDeviceInfo {
+    #[cfg(target_os = "linux")]
+    let bus = d.busnum();
+    // libusb derives the bus number from the location id, so this
+    // matches the conn= values sigrok users have.
+    #[cfg(target_os = "macos")]
+    let bus = (d.location_id() >> 24) as u8;
+    #[cfg(not(any(target_os = "linux", target_os = "macos")))]
+    let bus = 0;
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    let address = d.device_address();
+    #[cfg(not(any(target_os = "linux", target_os = "macos")))]
+    let address = 0;
+    UsbDeviceInfo {
+        vendor_id: d.vendor_id(),
+        product_id: d.product_id(),
+        device_version: d.device_version(),
+        bus,
+        address,
+        manufacturer: d.manufacturer_string().map(str::to_owned),
+        product: d.product_string().map(str::to_owned),
+        serial: d.serial_number().map(str::to_owned),
+        handle: Handle::Nusb(d.id()),
+    }
+}
+
+pub(crate) fn open(info: &UsbDeviceInfo) -> Result<Box<dyn Transport>> {
+    let Handle::Nusb(id) = &info.handle else {
+        return Err(Error::not_supported("not a nusb device"));
+    };
+    let devices = nusb::list_devices().wait().map_err(|e| map(&e, "usb"))?;
+    let found = devices
+        .into_iter()
+        .find(|d| d.id() == *id)
+        .ok_or_else(|| Error::device("device is gone"))?;
+    let device = found.open().wait().map_err(|e| map(&e, "usb"))?;
+    Ok(Box::new(Nusb {
+        info: info.clone(),
+        device,
+        interfaces: HashMap::new(),
+        in_endpoints: HashMap::new(),
+        out_endpoints: HashMap::new(),
+    }))
+}
+
+struct Nusb {
+    info: UsbDeviceInfo,
+    device: nusb::Device,
+    interfaces: HashMap<u8, nusb::Interface>,
+    in_endpoints: HashMap<u8, nusb::Endpoint<Bulk, In>>,
+    out_endpoints: HashMap<u8, nusb::Endpoint<Bulk, Out>>,
+}
+
+fn control_type(req: ControlRequest) -> (ControlType, Recipient) {
+    let kind = match req.kind() {
+        0 => ControlType::Standard,
+        1 => ControlType::Class,
+        _ => ControlType::Vendor,
+    };
+    let recipient = match req.recipient() {
+        1 => Recipient::Interface,
+        2 => Recipient::Endpoint,
+        3 => Recipient::Other,
+        _ => Recipient::Device,
+    };
+    (kind, recipient)
+}
+
+fn transfer_error(e: nusb::transfer::TransferError) -> Error {
+    use nusb::transfer::TransferError as T;
+    match e {
+        T::Cancelled => Error::Timeout,
+        T::Disconnected => Error::device("device disconnected"),
+        T::Stall => Error::device("endpoint stalled"),
+        other => Error::Device(other.to_string()),
+    }
+}
+
+impl Nusb {
+    /// The claimed interface that owns `endpoint`.
+    fn interface_for(&self, endpoint: u8) -> Result<&nusb::Interface> {
+        self.interfaces
+            .values()
+            .find(|i| {
+                i.descriptor().is_some_and(|d| d.endpoints().any(|e| e.address() == endpoint))
+            })
+            .ok_or_else(|| {
+                Error::device(format!("endpoint 0x{endpoint:02x} is not on a claimed interface"))
+            })
+    }
+
+    fn in_endpoint(&mut self, endpoint: u8) -> Result<&mut nusb::Endpoint<Bulk, In>> {
+        if !self.in_endpoints.contains_key(&endpoint) {
+            let ep = self
+                .interface_for(endpoint)?
+                .endpoint::<Bulk, In>(endpoint)
+                .map_err(|e| map(&e, "usb"))?;
+            self.in_endpoints.insert(endpoint, ep);
+        }
+        Ok(self.in_endpoints.get_mut(&endpoint).expect("inserted"))
+    }
+
+    fn out_endpoint(&mut self, endpoint: u8) -> Result<&mut nusb::Endpoint<Bulk, Out>> {
+        if !self.out_endpoints.contains_key(&endpoint) {
+            let ep = self
+                .interface_for(endpoint)?
+                .endpoint::<Bulk, Out>(endpoint)
+                .map_err(|e| map(&e, "usb"))?;
+            self.out_endpoints.insert(endpoint, ep);
+        }
+        Ok(self.out_endpoints.get_mut(&endpoint).expect("inserted"))
+    }
+
+    fn drop_endpoints(&mut self) {
+        self.in_endpoints.clear();
+        self.out_endpoints.clear();
+    }
+}
+
+impl Transport for Nusb {
+    fn info(&self) -> &UsbDeviceInfo {
+        &self.info
+    }
+
+    fn claim_interface(&mut self, interface: u8) -> Result<()> {
+        if self.interfaces.contains_key(&interface) {
+            return Ok(());
+        }
+        let i = self
+            .device
+            .detach_and_claim_interface(interface)
+            .wait()
+            .map_err(|e| map(&e, &format!("claim interface {interface}")))?;
+        self.interfaces.insert(interface, i);
+        Ok(())
+    }
+
+    fn release_interface(&mut self, interface: u8) -> Result<()> {
+        self.drop_endpoints();
+        if let Some(i) = self.interfaces.remove(&interface) {
+            i.release().wait().map_err(|e| map(&e, "usb"))?;
+        }
+        Ok(())
+    }
+
+    fn reset(&mut self) -> Result<()> {
+        self.drop_endpoints();
+        self.interfaces.clear();
+        self.device.reset().wait().map_err(|e| map(&e, "reset"))
+    }
+
+    fn max_packet_size(&mut self, endpoint: u8) -> Result<usize> {
+        let i = self.interface_for(endpoint)?;
+        let d = i.descriptor().ok_or_else(|| Error::device("no interface descriptor"))?;
+        d.endpoints()
+            .find(|e| e.address() == endpoint)
+            .map(|e| e.max_packet_size())
+            .ok_or_else(|| Error::device("no such endpoint"))
+    }
+
+    fn control_out(&mut self, req: ControlRequest, data: &[u8], timeout: Duration) -> Result<()> {
+        let (control_type, recipient) = control_type(req);
+        let out = ControlOut {
+            control_type,
+            recipient,
+            request: req.request,
+            value: req.value,
+            index: req.index,
+            data,
+        };
+        let r = if let Some(i) = self.interfaces.values().next() {
+            i.control_out(out, timeout).wait()
+        } else {
+            #[cfg(not(target_os = "windows"))]
+            {
+                self.device.control_out(out, timeout).wait()
+            }
+            #[cfg(target_os = "windows")]
+            {
+                return Err(Error::device("claim an interface before control transfers"));
+            }
+        };
+        r.map_err(transfer_error)
+    }
+
+    fn control_in(
+        &mut self,
+        req: ControlRequest,
+        len: usize,
+        timeout: Duration,
+    ) -> Result<Vec<u8>> {
+        let (control_type, recipient) = control_type(req);
+        let inp = ControlIn {
+            control_type,
+            recipient,
+            request: req.request,
+            value: req.value,
+            index: req.index,
+            length: u16::try_from(len).map_err(|_| Error::arg("control transfer too long"))?,
+        };
+        let r = if let Some(i) = self.interfaces.values().next() {
+            i.control_in(inp, timeout).wait()
+        } else {
+            #[cfg(not(target_os = "windows"))]
+            {
+                self.device.control_in(inp, timeout).wait()
+            }
+            #[cfg(target_os = "windows")]
+            {
+                return Err(Error::device("claim an interface before control transfers"));
+            }
+        };
+        r.map_err(transfer_error)
+    }
+
+    fn bulk_out(&mut self, endpoint: u8, data: &[u8], timeout: Duration) -> Result<usize> {
+        let ep = self.out_endpoint(endpoint)?;
+        let mut buf = Buffer::new(data.len());
+        buf.extend_from_slice(data);
+        let c = ep.transfer_blocking(buf, timeout);
+        match c.status {
+            Ok(()) => Ok(c.actual_len),
+            Err(nusb::transfer::TransferError::Cancelled) if c.actual_len > 0 => Ok(c.actual_len),
+            Err(e) => Err(transfer_error(e)),
+        }
+    }
+
+    fn bulk_in(&mut self, endpoint: u8, len: usize, timeout: Duration) -> Result<Vec<u8>> {
+        let ep = self.in_endpoint(endpoint)?;
+        let mps = ep.max_packet_size().max(1);
+        let len = len.div_ceil(mps).max(1) * mps;
+        let c = ep.transfer_blocking(Buffer::new(len), timeout);
+        match c.status {
+            Ok(()) => Ok(c.buffer.into_vec()),
+            Err(nusb::transfer::TransferError::Cancelled) if c.actual_len > 0 => {
+                let mut v = c.buffer.into_vec();
+                v.truncate(c.actual_len);
+                Ok(v)
+            }
+            Err(e) => Err(transfer_error(e)),
+        }
+    }
+}

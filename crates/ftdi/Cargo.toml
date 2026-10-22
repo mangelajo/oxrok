@@ -1,0 +1,20 @@
+[package]
+name = "oxrok-ftdi"
+description = "FTDI FT245/FT232 vendor protocol over oxrok-usb"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+oxrok-core.workspace = true
+oxrok-usb.workspace = true
+log.workspace = true
+
+[dev-dependencies]
+oxrok-usb = { workspace = true, features = ["nusb"] }
+
+[lints]
+workspace = true

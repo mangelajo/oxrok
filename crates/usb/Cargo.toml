@@ -1,0 +1,26 @@
+[package]
+name = "oxrok-usb"
+description = "USB transport for oxrok drivers: nusb or libusb behind one trait, with record and replay"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[features]
+default = ["nusb"]
+# Pure Rust backend (Linux, macOS, Windows, Android).
+nusb = ["dep:nusb"]
+# libusb backend, for the BSDs and as a fallback. Builds libusb from
+# source so no system package is needed.
+libusb = ["dep:rusb"]
+
+[dependencies]
+oxrok-core.workspace = true
+log.workspace = true
+nusb = { version = "0.2.8", optional = true }
+rusb = { version = "0.9.4", optional = true, features = ["vendored"] }
+
+[lints]
+workspace = true
