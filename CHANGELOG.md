@@ -81,6 +81,8 @@ release may change the library API.
   `--protocol-decoder-ann-class`, `-P dec --show` and the decoder
   section of `-L`. Their output is identical to sigrok-cli's in every
   mode on synthetic captures.
+- Conformance fixtures from the bench: a UART and an SPI capture taken
+  with the LogicPort from the ESP32, decoded identically to sigrok-cli.
 - Stacked decoders (`-P i2c,eeprom24xx`), synchronous as in
   libsigrokdecode, and `oxrok-pydecode` behind the `python` feature of
   the CLI: libsigrokdecode's Python decoders run unchanged on the same

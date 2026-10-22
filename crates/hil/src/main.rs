@@ -34,7 +34,8 @@ struct Args {
     filter: String,
     conn: Option<String>,
     port: Option<String>,
-    /// Only set the generator up (`--clk HZ`, `--set MASK`) and exit.
+    /// Only drive the generator (`--clk HZ`, `--set MASK`, `--cmd LINE`)
+    /// and exit.
     setup: Vec<String>,
 }
 
@@ -51,7 +52,7 @@ fn parse_args() -> Args {
             "-k" => a.filter = it.next().unwrap_or_default(),
             "--conn" => a.conn = it.next(),
             "--port" => a.port = it.next(),
-            "--clk" | "--set" => {
+            "--clk" | "--set" | "--cmd" => {
                 a.setup.push(x.clone());
                 a.setup.push(it.next().unwrap_or_default());
             }
@@ -306,8 +307,12 @@ fn main() -> ExitCode {
     };
     if !args.setup.is_empty() {
         for pair in args.setup.chunks(2) {
-            let v: u32 = pair[1].parse().unwrap_or(0);
-            let r = if pair[0] == "--clk" { g.clk(v) } else { g.set(v) };
+            let r = if pair[0] == "--cmd" {
+                g.cmd(&pair[1], Duration::from_secs(30)).map(|reply| println!("{reply}"))
+            } else {
+                let v: u32 = pair[1].parse().unwrap_or(0);
+                if pair[0] == "--clk" { g.clk(v) } else { g.set(v) }
+            };
             if let Err(e) = r {
                 eprintln!("{e}");
                 return ExitCode::FAILURE;

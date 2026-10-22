@@ -24,7 +24,9 @@ Bench: `oxrok-hil` runs the hardware checks (levels, threshold, timebase
 up to 500 MHz, triggers, compression, frames, all byte lanes) against a
 LogicPort wired to the ESP32 signal generator from the libsigrok driver
 repository. `oxrok-hil -k trigger` runs a subset, `LOGICPORT_CONN`
-picks a unit, `SIGGEN_PORT` the serial port.
+picks a unit, `SIGGEN_PORT` the serial port. `oxrok-hil --clk HZ`,
+`--set MASK` and `--cmd LINE` only drive the generator, for captures by
+hand.
 
 Verified 2026-10-22 on two units: all 35 bench checks pass, and the
 `bits` and `csv` outputs match the libsigrok driver through sigrok-cli

@@ -17,6 +17,8 @@ fn oxrok(args: &[&str]) -> (String, String, bool) {
 const VCD: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/uart-hi.vcd");
 const I2C: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/i2c-write-read.vcd");
 const SPI: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/spi-mode0.vcd");
+const UART_ESP32: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/uart-esp32.sr");
+const SPI_ESP32: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/spi-esp32.sr");
 
 #[test]
 fn uart_annotations_match_libsigrokdecode() {
@@ -127,6 +129,40 @@ fn spi_annotations_match_libsigrokdecode() {
         .output()
         .unwrap();
     assert_eq!(out.stdout, [0x3c, 0xff, 0x7e]);
+}
+
+/// Captures taken with the `LogicPort` from the ESP32 on the bench,
+/// 2026-10-22: its boot banner on TX at 115200 baud, and an SPI
+/// transfer of `A5 01 3C` with `FF` on MISO. The goldens are sigrok-cli's
+/// output.
+#[test]
+fn real_captures_match_libsigrokdecode() {
+    let (out, _, ok) = oxrok(&["-l", "4", "-i", UART_ESP32, "-P", "uart:baudrate=115200:rx=D21"]);
+    assert!(ok);
+    assert_eq!(out, include_str!("fixtures/uart-esp32.ann"));
+    let (out, _, _) = oxrok(&[
+        "-i",
+        UART_ESP32,
+        "-P",
+        "uart:baudrate=115200:rx=D21:format=ascii",
+        "-A",
+        "uart=rx-data",
+    ]);
+    let text: String = out.lines().map(|l| l.trim_start_matches("uart-1: ")).collect();
+    assert!(text.starts_with("ets Jun  8 2016"), "{text}");
+    let (out, _, ok) =
+        oxrok(&["-l", "4", "-i", SPI_ESP32, "-P", "spi:clk=D28:miso=D26:mosi=D5:cs=D25"]);
+    assert!(ok);
+    assert_eq!(out, include_str!("fixtures/spi-esp32.ann"));
+    let (out, _, _) = oxrok(&[
+        "-i",
+        SPI_ESP32,
+        "-P",
+        "spi:clk=D28:miso=D26:mosi=D5:cs=D25",
+        "-A",
+        "spi=mosi-transfer",
+    ]);
+    assert_eq!(out, "spi-1: A5 01 3C\n");
 }
 
 /// The Python host, with the python feature and a libsigrokdecode

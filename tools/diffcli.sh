@@ -147,6 +147,10 @@ case_ "spi all annotations verbose" --keep-header -- -l 4 -i "$SPI" -P spi
 case_ "spi lsb first nibbles" --keep-header -- -i "$SPI" -P spi:bitorder=lsb-first:wordsize=4 -A spi=mosi-data
 case_ "spi transfers" --keep-header -- -i "$SPI" -P spi -A spi=mosi-transfer:miso-transfer
 case_ "spi binary" --keep-header -- -i "$SPI" -P spi -B spi=miso
+UARTSR="$(dirname "$0")/../crates/cli/tests/fixtures/uart-esp32.sr"
+SPISR="$(dirname "$0")/../crates/cli/tests/fixtures/spi-esp32.sr"
+case_ "uart real capture" --keep-header -- -l 4 -i "$UARTSR" -P uart:baudrate=115200:rx=D21
+case_ "spi real capture" --keep-header -- -l 4 -i "$SPISR" -P spi:clk=D28:miso=D26:mosi=D5:cs=D25
 # The documentation text is oxrok's own, and this libsigrokdecode build
 # predates decoder tags.
 case_ "decoder show uart" --keep-header --names --filter '/^Documentation:/,$d; /^Decoder tags:/,/^Annotation classes:/{/^- /d;/^None\.$/d;}' -- -P uart --show
