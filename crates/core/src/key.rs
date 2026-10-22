@@ -1,4 +1,5 @@
 // Counterpart in sigrok: libsigrok/src/hwdriver.c (the key table),
+//   libsigrok/include/libsigrok/libsigrok.h (the key definitions),
 //   Copyright (C) 2013 Bert Vermeulen <bert@biot.com>.
 // This file is an independent implementation written for oxrok from the
 // observed behaviour and the public interfaces.

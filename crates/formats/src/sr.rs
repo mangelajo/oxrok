@@ -1,4 +1,5 @@
 // Counterpart in sigrok: libsigrok/src/session_file.c,
+//   libsigrok/src/session_driver.c,
 //   libsigrok/src/output/srzip.c,
 //   Copyright (C) 2013 Bert Vermeulen <bert@biot.com>,
 //   Copyright (C) 2014 Bert Vermeulen <bert@biot.com>.

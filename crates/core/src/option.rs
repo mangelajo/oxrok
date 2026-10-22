@@ -1,5 +1,7 @@
 // Counterpart in sigrok: libsigrok/src/hwdriver.c,
-//   Copyright (C) 2013 Bert Vermeulen <bert@biot.com>.
+//   libsigrok/src/std.c (the option list helpers),
+//   Copyright (C) 2013 Bert Vermeulen <bert@biot.com>,
+//   Copyright (C) 2013 Uwe Hermann <uwe@hermann-uwe.de>.
 // This file is an independent implementation written for oxrok from the
 // observed behaviour and the public interfaces.
 

@@ -1,3 +1,8 @@
+// Counterpart in sigrok: libsigrok/src/log.c,
+//   Copyright (C) 2011-2012 Uwe Hermann <uwe@hermann-uwe.de>.
+// This file is an independent implementation written for oxrok from the
+// observed behaviour and the public interfaces.
+
 //! A small stderr logger driven by `-l`.
 
 use log::{Level, LevelFilter, Log, Metadata, Record};
