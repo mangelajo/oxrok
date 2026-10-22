@@ -19,7 +19,7 @@ use crate::error::{Error, Result};
 use crate::key::Key;
 use crate::option::{OptionDesc, ValueList};
 use crate::packet::Packet;
-use crate::trigger::Trigger;
+use crate::trigger::{Trigger, TriggerFeatures};
 use crate::value::Value;
 use std::sync::mpsc::SyncSender;
 
@@ -180,6 +180,12 @@ pub trait Device: Send {
     /// Closes the device.
     fn close(&mut self) -> Result<()> {
         Ok(())
+    }
+
+    /// What the device's trigger can do beyond level and edge stages.
+    /// The default is nothing beyond them, with any number of stages.
+    fn trigger_features(&self) -> TriggerFeatures {
+        TriggerFeatures::default()
     }
 
     /// Sets the trigger for the next acquisition, or clears it.

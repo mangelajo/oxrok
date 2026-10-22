@@ -29,6 +29,7 @@ pub mod packet;
 pub mod session;
 pub mod softtrig;
 pub mod trigger;
+pub mod trigger_syntax;
 pub mod util;
 pub mod value;
 
@@ -37,11 +38,14 @@ pub use channel::{Channel, ChannelGroup, ChannelKind};
 pub use device::{Device, DeviceClass, DeviceInfo, Driver, PacketSink, Registry};
 pub use error::{Error, Result};
 pub use key::Key;
-pub use option::{Access, OptionDesc, ValueList};
+pub use option::{Access, OptionDesc, ValueList, resolve_key};
 pub use packet::{AnalogData, LogicData, Packet};
 pub use session::Session;
 pub use softtrig::{PreTriggerBuffer, SoftTrigger};
-pub use trigger::{Trigger, TriggerMatch, TriggerStage};
+pub use trigger::{
+    Trigger, TriggerCombine, TriggerCount, TriggerDuration, TriggerFeatures, TriggerMatch,
+    TriggerRange, TriggerStage,
+};
 pub use value::{Value, ValueKind};
 
 /// The version of the oxrok workspace this crate was built from.

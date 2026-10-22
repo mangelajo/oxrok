@@ -114,6 +114,22 @@ impl ValueList {
     }
 }
 
+/// Resolves a key name against the device's options of `group`, so a
+/// driver's custom keys work like the well known ones.
+pub fn resolve_key(
+    device: &dyn crate::device::Device,
+    name: &str,
+    group: Option<&str>,
+) -> crate::error::Result<Key> {
+    if let Ok(options) = device.options(group)
+        && let Some(o) = options.iter().find(|o| o.key.id() == name)
+    {
+        return Ok(o.key.clone());
+    }
+    Key::from_id(name)
+        .ok_or_else(|| crate::error::Error::Arg(format!("Unknown device option '{name}'.")))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

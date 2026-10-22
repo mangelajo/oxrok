@@ -17,7 +17,7 @@
 mod siggen;
 
 use oxrok_core::session::Flow;
-use oxrok_core::{Device, Driver, Key, Packet, Session, Trigger, TriggerMatch, Value};
+use oxrok_core::{Device, Driver, Key, Packet, Session, Value};
 use oxrok_driver_logicport::LogicPortDriver;
 use siggen::SigGen;
 use std::process::ExitCode;
@@ -111,7 +111,7 @@ impl Capture {
         dev.open().map_err(|e| format!("open: {e}"))?;
         for item in req.config.split(':').filter(|s| !s.is_empty()) {
             let (k, v) = item.split_once('=').ok_or_else(|| format!("bad config {item}"))?;
-            let key = Key::from_id(k).ok_or_else(|| format!("unknown key {k}"))?;
+            let key = oxrok_core::resolve_key(dev.as_ref(), k, None).map_err(|e| e.to_string())?;
             let value = Value::parse(key.kind(), v).map_err(|e| e.to_string())?;
             dev.set(&key, &value, None).map_err(|e| format!("set {k}: {e}"))?;
         }
@@ -144,7 +144,9 @@ impl Capture {
             dev.set(&Key::LimitFrames, &Value::U64(f), None).map_err(|e| e.to_string())?;
         }
         let trigger = match req.triggers {
-            Some(spec) => Some(parse_triggers(&channels, spec)?),
+            Some(spec) => Some(
+                oxrok_core::trigger_syntax::parse(dev.as_ref(), spec).map_err(|e| e.to_string())?,
+            ),
             None => None,
         };
         let mut session = Session::new();
@@ -224,27 +226,6 @@ impl Capture {
         self.frames = frames;
         Ok(self.frames[0].clone())
     }
-}
-
-/// `D0=r,D1=1` for one stage, stages separated by `;`.
-fn parse_triggers(channels: &[String], spec: &str) -> Result<Trigger, String> {
-    let mut t = Trigger::new();
-    for (stage, part) in spec.split(';').enumerate() {
-        for cond in part.split(',') {
-            let (name, m) = cond.split_once('=').ok_or_else(|| format!("bad trigger {cond}"))?;
-            let ch = channels
-                .iter()
-                .position(|c| c == name)
-                .ok_or_else(|| format!("no channel {name}"))?;
-            let code = m
-                .chars()
-                .next()
-                .and_then(TriggerMatch::from_code)
-                .ok_or_else(|| format!("bad match {m}"))?;
-            t.add(stage, ch, code);
-        }
-    }
-    Ok(t)
 }
 
 fn edges(v: &[u64], mask: u64, kind: &str) -> Vec<usize> {

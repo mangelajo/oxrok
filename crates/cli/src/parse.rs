@@ -11,9 +11,7 @@
 //! Parsers for the sigrok-cli argument syntaxes.
 
 use crate::args::Args;
-use oxrok_core::{
-    Device, Driver, Error, Key, Registry, Result, Trigger, TriggerMatch, Value, ValueList,
-};
+use oxrok_core::{Device, Driver, Error, Key, Registry, Result, Trigger, Value};
 
 /// A `key=value:key=value` list. `first_key` names a key whose first
 /// element may appear without a value and selects a scope, e.g. the
@@ -94,12 +92,7 @@ pub fn device_scan(registry: &Registry, args: &Args) -> Result<Vec<Box<dyn Devic
 /// Resolves a key name against the device's options of `group`, so a
 /// driver's custom keys work like the well known ones.
 pub fn resolve_key(device: &dyn Device, name: &str, group: Option<&str>) -> Result<Key> {
-    if let Ok(options) = device.options(group)
-        && let Some(o) = options.iter().find(|o| o.key.id() == name)
-    {
-        return Ok(o.key.clone());
-    }
-    Key::from_id(name).ok_or_else(|| Error::Arg(format!("Unknown device option '{name}'.")))
+    oxrok_core::resolve_key(device, name, group)
 }
 
 /// Applies every `-c` option to the device. The group comes from the
@@ -174,40 +167,7 @@ pub fn select_channels(device: &mut dyn Device, spec: &str) -> Result<()> {
 /// letters on one channel (`D0=rf`) go to successive stages, as in
 /// sigrok-cli.
 pub fn parse_triggers(device: &dyn Device, spec: &str) -> Result<Trigger> {
-    let Ok(ValueList::TriggerMatches(supported)) = device.list(&Key::TriggerMatch, None) else {
-        return Err(Error::arg("Device doesn't support any triggers."));
-    };
-    let mut trigger = Trigger::new();
-    let mut base_stage = 0;
-    for stage_text in spec.split(';') {
-        let mut deepest = base_stage;
-        for token in stage_text.split(',') {
-            let (name, codes) = token
-                .split_once('=')
-                .ok_or_else(|| Error::Arg(format!("Invalid trigger '{token}'.")))?;
-            let ch = device
-                .channels()
-                .iter()
-                .find(|c| c.enabled && c.name == name)
-                .ok_or_else(|| Error::Arg(format!("Invalid channel '{name}'.")))?;
-            for (i, code) in codes.chars().enumerate() {
-                let m = TriggerMatch::from_code(code)
-                    .ok_or_else(|| Error::Arg(format!("Invalid trigger match '{code}'.")))?;
-                if !supported.contains(&m) {
-                    return Err(Error::Arg(format!(
-                        "Trigger match '{code}' not supported by device."
-                    )));
-                }
-                trigger.add(base_stage + i, ch.index, m);
-                deepest = deepest.max(base_stage + i);
-            }
-        }
-        base_stage = deepest + 1;
-    }
-    if !trigger.is_valid() {
-        return Err(Error::arg("Invalid trigger."));
-    }
-    Ok(trigger)
+    oxrok_core::trigger_syntax::parse(device, spec)
 }
 
 #[cfg(test)]

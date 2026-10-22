@@ -402,7 +402,14 @@ impl Device for DemoDevice {
         })
     }
 
+    fn trigger_features(&self) -> oxrok_core::TriggerFeatures {
+        SoftTrigger::FEATURES
+    }
+
     fn set_trigger(&mut self, trigger: Option<Trigger>) -> Result<()> {
+        if let Some(t) = &trigger {
+            SoftTrigger::check(t)?;
+        }
         self.trigger = trigger;
         Ok(())
     }
