@@ -29,9 +29,12 @@ picks a unit, `SIGGEN_PORT` the serial port. `oxrok-hil --clk HZ`,
 for captures by hand. Opening the serial port resets the ESP32, so the
 commands of one experiment go in one invocation.
 
-Verified 2026-10-22 on two units: all 35 bench checks pass, and the
-`bits` and `csv` outputs match the libsigrok driver through sigrok-cli
-byte for byte for the same captures.
+Verified 2026-10-22 on two units: all 36 bench checks pass, the `bits`
+and `csv` outputs match the libsigrok driver through sigrok-cli byte for
+byte for the same captures, and a cold start (unconfigured FPGA after a
+power cycle) configures and captures in about 4 s: the open sees no
+answer, loads the image by bit-bang, resyncs once while the FPGA comes
+up, and proceeds.
 
 ## fx2lafw devices
 
