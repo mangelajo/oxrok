@@ -1,8 +1,13 @@
-// Counterpart in sigrok: libsigrok/src/session.c (the datafeed packets),
+// Counterpart in sigrok:
+//   libsigrok/src/session.c (the datafeed packets),
 //   Copyright (C) 2010-2012 Bert Vermeulen <bert@biot.com>,
-//   Copyright (C) 2015 Daniel Elstner <daniel.kitta@gmail.com>.
+//   Copyright (C) 2015 Daniel Elstner <daniel.kitta@gmail.com>,
+//   with commits by Uwe Hermann, Martin Ling, Gerhard Sittig, Stefan Brüns,
+//   Aurelien Jacobs, Daniel Glöckner, Frank Stettner, Soeren Apel,
+//   Wolfram Sang
+//   (libsigrok libsigrok-unreleased-1855-g20baa77f).
 // This file is an independent implementation written for oxrok from the
-// observed behaviour and the public interfaces.
+//   observed behaviour and the public interfaces.
 
 //! The data feed: what a device sends while it acquires.
 

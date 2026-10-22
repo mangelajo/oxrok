@@ -1,7 +1,11 @@
-// Counterpart in sigrok: libsigrok/src/input/input.c,
-//   Copyright (C) 2014 Bert Vermeulen <bert@biot.com>.
+// Counterpart in sigrok:
+//   libsigrok/src/input/input.c,
+//   Copyright (C) 2014 Bert Vermeulen <bert@biot.com>,
+//   with commits by Gerhard Sittig, Uwe Hermann, Daniel Elstner, Soeren Apel,
+//   Filip Kosecek, Joel Holdsworth, Stefan Brüns
+//   (libsigrok libsigrok-unreleased-1855-g20baa77f).
 // This file is an independent implementation written for oxrok from the
-// observed behaviour and the public interfaces.
+//   observed behaviour and the public interfaces.
 
 //! Input modules read files into the packet stream.
 

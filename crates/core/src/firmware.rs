@@ -1,7 +1,10 @@
-// Counterpart in sigrok: libsigrok/src/resource.c,
-//   Copyright (C) 2015 Daniel Elstner <daniel.kitta@gmail.com>.
+// Counterpart in sigrok:
+//   libsigrok/src/resource.c,
+//   Copyright (C) 2015 Daniel Elstner <daniel.kitta@gmail.com>,
+//   with commits by Uwe Hermann, Soeren Apel, Gerhard Sittig
+//   (libsigrok libsigrok-unreleased-1855-g20baa77f).
 // This file is an independent implementation written for oxrok from the
-// observed behaviour and the public interfaces.
+//   observed behaviour and the public interfaces.
 
 //! Finding firmware and bitstream files.
 //!

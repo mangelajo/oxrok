@@ -1,9 +1,17 @@
-// Counterpart in sigrok: libsigrok/src/hwdriver.c,
+// Counterpart in sigrok:
+//   libsigrok/src/hwdriver.c,
 //   libsigrok/src/std.c (the option list helpers),
 //   Copyright (C) 2013 Bert Vermeulen <bert@biot.com>,
-//   Copyright (C) 2013 Uwe Hermann <uwe@hermann-uwe.de>.
+//   Copyright (C) 2013 Uwe Hermann <uwe@hermann-uwe.de>,
+//   with commits by Aurelien Jacobs, Frank Stettner, Martin Ling,
+//   Alexandru Gagniuc, Daniel Elstner, Guido Trentalancia, Marc Schink,
+//   Bartosz Golaszewski, Gerhard Sittig, Timo Kokkonen, Andreas Sandberg,
+//   Andrej Valek, Benjamin Larsson, Daniel Anselmi, Diego Asanza,
+//   Janne Huttunen, Markus Heidelberg, Soeren Apel, Timo Boettcher,
+//   Lars-Peter Clausen, Sylvain Munaut, Wolfram Sang
+//   (libsigrok libsigrok-unreleased-1855-g20baa77f).
 // This file is an independent implementation written for oxrok from the
-// observed behaviour and the public interfaces.
+//   observed behaviour and the public interfaces.
 
 //! Device option descriptors: which keys a device has and how they can
 //! be used.

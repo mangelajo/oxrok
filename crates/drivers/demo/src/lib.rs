@@ -1,12 +1,16 @@
-// Counterpart in sigrok: libsigrok/src/hardware/demo/api.c,
+// Counterpart in sigrok:
+//   libsigrok/src/hardware/demo/api.c,
 //   libsigrok/src/hardware/demo/protocol.c,
 //   Copyright (C) 2010 Uwe Hermann <uwe@hermann-uwe.de>,
 //   Copyright (C) 2011 Olivier Fauchon <olivier@aixmarseille.com>,
 //   Copyright (C) 2012 Alexandru Gagniuc <mr.nuke.me@gmail.com>,
 //   Copyright (C) 2015 Bartosz Golaszewski <bgolaszewski@baylibre.com>,
-//   Copyright (C) 2019 Frank Stettner <frank-stettner@gmx.net>.
+//   Copyright (C) 2019 Frank Stettner <frank-stettner@gmx.net>,
+//   with commits by Gerhard Sittig, Soeren Apel, luftek, Marc Schink,
+//   Miklos Marton, Sven Schnelle
+//   (libsigrok libsigrok-unreleased-1855-g20baa77f).
 // This file is an independent implementation written for oxrok from the
-// observed behaviour and the public interfaces.
+//   observed behaviour and the public interfaces.
 
 //! The demo driver: a pattern generator that needs no hardware.
 //!

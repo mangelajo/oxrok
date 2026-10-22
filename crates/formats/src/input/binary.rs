@@ -1,7 +1,11 @@
-// Counterpart in sigrok: libsigrok/src/input/binary.c,
-//   Copyright (C) 2013 Bert Vermeulen <bert@biot.com>.
+// Counterpart in sigrok:
+//   libsigrok/src/input/binary.c,
+//   Copyright (C) 2013 Bert Vermeulen <bert@biot.com>,
+//   with commits by Uwe Hermann, Daniel Elstner, Gerhard Sittig, Soeren Apel,
+//   Joel Holdsworth, Lars-Peter Clausen, Martin Ling, Stefan Brüns
+//   (libsigrok libsigrok-unreleased-1855-g20baa77f).
 // This file is an independent implementation written for oxrok from the
-// observed behaviour and the public interfaces.
+//   observed behaviour and the public interfaces.
 
 //! `binary`: raw logic samples, `ceil(numchannels / 8)` bytes each.
 

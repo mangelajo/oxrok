@@ -1,7 +1,11 @@
-// Counterpart in sigrok: sigrok-cli/options.c,
-//   Copyright (C) 2013 Bert Vermeulen <bert@biot.com>.
+// Counterpart in sigrok:
+//   sigrok-cli/options.c,
+//   Copyright (C) 2013 Bert Vermeulen <bert@biot.com>,
+//   with commits by Uwe Hermann, Gerhard Sittig, Jens Steinhauser,
+//   Daniel Elstner, Karl Palsson, Sergey Spivak
+//   (sigrok-cli sigrok-cli-unreleased-103-gf44dd91).
 // This file is an independent implementation written for oxrok from the
-// observed behaviour and the public interfaces.
+//   observed behaviour and the public interfaces.
 
 //! Command line flags, sigrok-cli compatible.
 

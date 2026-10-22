@@ -1,7 +1,11 @@
-// Counterpart in sigrok: libsigrok/src/log.c,
-//   Copyright (C) 2011-2012 Uwe Hermann <uwe@hermann-uwe.de>.
+// Counterpart in sigrok:
+//   libsigrok/src/log.c,
+//   Copyright (C) 2011-2012 Uwe Hermann <uwe@hermann-uwe.de>,
+//   with commits by Daniel Elstner, Gerhard Sittig, Bert Vermeulen,
+//   Soeren Apel
+//   (libsigrok libsigrok-unreleased-1855-g20baa77f).
 // This file is an independent implementation written for oxrok from the
-// observed behaviour and the public interfaces.
+//   observed behaviour and the public interfaces.
 
 //! A small stderr logger driven by `-l`.
 

@@ -1,7 +1,12 @@
-// Counterpart in sigrok: libsigrok/src/strutil.c,
-//   Copyright (C) 2010 Uwe Hermann <uwe@hermann-uwe.de>.
+// Counterpart in sigrok:
+//   libsigrok/src/strutil.c,
+//   Copyright (C) 2010 Uwe Hermann <uwe@hermann-uwe.de>,
+//   with commits by Gerhard Sittig, Frank Stettner, Stefan Brüns,
+//   Andreas Sandberg, Bert Vermeulen, Daniel Elstner, Aurelien Jacobs,
+//   Niklas Thorne, Soeren Apel
+//   (libsigrok libsigrok-unreleased-1855-g20baa77f).
 // This file is an independent implementation written for oxrok from the
-// observed behaviour and the public interfaces.
+//   observed behaviour and the public interfaces.
 
 //! Parsing and formatting helpers shared by the CLI and the formats.
 //!

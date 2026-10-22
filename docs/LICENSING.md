@@ -21,12 +21,16 @@ Not legal advice. The policy oxrok follows:
 ## Attribution of the sigrok counterparts
 
 Every Rust source that corresponds to a sigrok file starts with a
-`Counterpart in sigrok` comment naming that file and its copyright
-holders, as credit to the people whose work defined the behaviour oxrok
-reproduces. The comment also says how the Rust file relates to it: an
-independent implementation written from the observed behaviour and the
-public interfaces (the usual case), a port by the same author who
-relicensed it (the LogicPort driver), or a file written from vendor
-documentation with the sigrok code as the reference for scope (the FTDI
-layer). One name is transliterated to ASCII in those comments; the
-original spelling is in the libsigrok sources.
+`Counterpart in sigrok` comment naming that file, the copyright holders
+from its header, and everyone else who committed to it according to
+the libsigrok and sigrok-cli git histories, as credit to the people
+whose work defined the behaviour oxrok reproduces. The comment also
+says how the Rust file relates to it: an independent implementation
+written from the observed behaviour and the public interfaces (the
+usual case), a port by the same author who relicensed it (the LogicPort
+driver), or a file written from vendor documentation with the sigrok
+code as the reference for scope (the FTDI layer).
+
+`tools/attribution.py` generates these comments from the checkouts, so
+they can be refreshed when the counterparts change. Names are kept as
+the git history spells them; `--ascii` transliterates them.

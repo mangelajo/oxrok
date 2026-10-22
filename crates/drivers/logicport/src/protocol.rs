@@ -1,5 +1,7 @@
-// Counterpart in sigrok: libsigrok/src/hardware/intronix-logicport/protocol.c,
-//   Copyright (C) 2026 Miguel Angel Ajo Pelayo <miguelangel@ajo.es>.
+// Counterpart in sigrok:
+//   libsigrok/src/hardware/intronix-logicport/protocol.c,
+//   Copyright (C) 2026 Miguel Angel Ajo Pelayo <miguelangel@ajo.es>
+//   (libsigrok libsigrok-unreleased-1855-g20baa77f).
 // This file is a port by the same author, relicensed.
 
 //! The host protocol of the LogicPort.

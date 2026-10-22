@@ -1,7 +1,13 @@
-// Counterpart in sigrok: sigrok-cli/session.c,
-//   Copyright (C) 2013 Bert Vermeulen <bert@biot.com>.
+// Counterpart in sigrok:
+//   sigrok-cli/session.c,
+//   Copyright (C) 2013 Bert Vermeulen <bert@biot.com>,
+//   with commits by Uwe Hermann, Gerhard Sittig, Bartosz Golaszewski,
+//   Daniel Elstner, Martin Ling, Soeren Apel, Aleksander Alekseev,
+//   Aurelien Jacobs, Devan Lai, Guido Trentalancia, Jens Steinhauser,
+//   Peter Zotov, Vincent Palatin, poljar (Damir Jelić)
+//   (sigrok-cli sigrok-cli-unreleased-103-gf44dd91).
 // This file is an independent implementation written for oxrok from the
-// observed behaviour and the public interfaces.
+//   observed behaviour and the public interfaces.
 
 //! Acquisition runs, `--get` and `--set`.
 

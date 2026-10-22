@@ -1,9 +1,14 @@
-// Counterpart in sigrok: libsigrok/src/input/vcd.c,
+// Counterpart in sigrok:
+//   libsigrok/src/input/vcd.c,
 //   Copyright (C) 2012 Petteri Aimonen <jpa@sr.mail.kapsi.fi>,
 //   Copyright (C) 2014 Bert Vermeulen <bert@biot.com>,
-//   Copyright (C) 2017-2020 Gerhard Sittig <gerhard.sittig@gmx.net>.
+//   Copyright (C) 2017-2020 Gerhard Sittig <gerhard.sittig@gmx.net>,
+//   with commits by Uwe Hermann, Wolfram Sang, 7FM, Daniel Elstner,
+//   Soeren Apel, Aurelien Jacobs, Joel Holdsworth, Lars-Peter Clausen,
+//   Martin Ling, Stefan Brüns
+//   (libsigrok libsigrok-unreleased-1855-g20baa77f).
 // This file is an independent implementation written for oxrok from the
-// observed behaviour and the public interfaces.
+//   observed behaviour and the public interfaces.
 
 //! `vcd`: reads a Value Change Dump into logic and analog samples.
 //!

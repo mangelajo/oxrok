@@ -1,8 +1,16 @@
-// Counterpart in sigrok: libsigrok/src/hwdriver.c (the key table),
+// Counterpart in sigrok:
+//   libsigrok/src/hwdriver.c (the key table),
 //   libsigrok/include/libsigrok/libsigrok.h (the key definitions),
-//   Copyright (C) 2013 Bert Vermeulen <bert@biot.com>.
+//   Copyright (C) 2013 Bert Vermeulen <bert@biot.com>,
+//   with commits by Uwe Hermann, Aurelien Jacobs, Frank Stettner,
+//   Martin Ling, Alexandru Gagniuc, Daniel Elstner, Guido Trentalancia,
+//   Marc Schink, Bartosz Golaszewski, Gerhard Sittig, Timo Kokkonen,
+//   Andreas Sandberg, Andrej Valek, Benjamin Larsson, Daniel Anselmi,
+//   Diego Asanza, Janne Huttunen, Markus Heidelberg, Soeren Apel,
+//   Timo Boettcher, Tilman Sauerbeck
+//   (libsigrok libsigrok-unreleased-1855-g20baa77f).
 // This file is an independent implementation written for oxrok from the
-// observed behaviour and the public interfaces.
+//   observed behaviour and the public interfaces.
 
 //! Configuration keys.
 //!

@@ -1,6 +1,7 @@
-// Counterpart in sigrok: libftdi1 (ftdi.c), by Intra2net AG and the libftdi developers.
-// This file is written for oxrok from FTDI's application notes;
-// libftdi was the reference for which requests a driver needs.
+// Counterpart in sigrok:
+//   libftdi1 (ftdi.c), by Intra2net AG and the libftdi developers.
+// This file is written for oxrok from FTDI's application notes; libftdi was
+//   the reference for which requests a driver needs.
 
 //! The FTDI vendor protocol for FT232/FT245 class chips, on top of
 //! [`oxrok_usb::Transport`].

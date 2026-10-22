@@ -1,7 +1,11 @@
-// Counterpart in sigrok: libsigrok/src/output/binary.c,
-//   Copyright (C) 2010 Uwe Hermann <uwe@hermann-uwe.de>.
+// Counterpart in sigrok:
+//   libsigrok/src/output/binary.c,
+//   Copyright (C) 2010 Uwe Hermann <uwe@hermann-uwe.de>,
+//   with commits by Bert Vermeulen, Daniel Elstner, Gerhard Sittig,
+//   Joel Holdsworth, Soeren Apel
+//   (libsigrok libsigrok-unreleased-1855-g20baa77f).
 // This file is an independent implementation written for oxrok from the
-// observed behaviour and the public interfaces.
+//   observed behaviour and the public interfaces.
 
 //! `binary`: the raw logic samples, nothing else.
 

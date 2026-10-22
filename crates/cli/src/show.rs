@@ -1,7 +1,12 @@
-// Counterpart in sigrok: sigrok-cli/show.c,
-//   Copyright (C) 2013 Bert Vermeulen <bert@biot.com>.
+// Counterpart in sigrok:
+//   sigrok-cli/show.c,
+//   Copyright (C) 2013 Bert Vermeulen <bert@biot.com>,
+//   with commits by Uwe Hermann, Gerhard Sittig, Aurelien Jacobs,
+//   Daniel Elstner, Andreas Sandberg, Frank Stettner, Guido Trentalancia,
+//   Jens Steinhauser, Karl Palsson, Martin Ling, Soeren Apel
+//   (sigrok-cli sigrok-cli-unreleased-103-gf44dd91).
 // This file is an independent implementation written for oxrok from the
-// observed behaviour and the public interfaces.
+//   observed behaviour and the public interfaces.
 
 //! `--version`, `-L`, `--scan` and `--show`.
 

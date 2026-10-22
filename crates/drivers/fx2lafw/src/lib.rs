@@ -1,10 +1,18 @@
-// Counterpart in sigrok: libsigrok/src/hardware/fx2lafw/api.c,
+// Counterpart in sigrok:
+//   libsigrok/src/hardware/fx2lafw/api.c,
 //   libsigrok/src/hardware/fx2lafw/protocol.c,
 //   sigrok-firmware-fx2lafw (the command set),
+//   Copyright (C) 2013 Bert Vermeulen <bert@biot.com>,
 //   Copyright (C) 2012 Joel Holdsworth <joel@airwebreathe.org.uk>,
-//   Copyright (C) 2013 Bert Vermeulen <bert@biot.com>.
+//   with commits by Uwe Hermann, Lars-Peter Clausen, Diego Asanza,
+//   Gerhard Sittig, Soeren Apel, Aurelien Jacobs, Daniel Elstner,
+//   Martin Ling, Romain Tartière, Angus Gratton, Benjamin Larsson,
+//   Carl-Fredrik Sundström, Daniel Gröber, Diego F. Asanza, Jan Losinski,
+//   Karl Palsson, Kate J. Temkin, Peetz0r, Thomas, Tilman Sauerbeck,
+//   Valentin Ochs, Vlad Ivanov, eightdot
+//   (libsigrok libsigrok-unreleased-1855-g20baa77f).
 // This file is an independent implementation written for oxrok from the
-// observed behaviour and the public interfaces.
+//   observed behaviour and the public interfaces.
 
 //! fx2lafw: logic analyzers built on the Cypress FX2 running the sigrok
 //! `fx2lafw` firmware. The FX2 streams its GPIO port over a bulk

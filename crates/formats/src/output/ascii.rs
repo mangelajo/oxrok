@@ -1,8 +1,12 @@
-// Counterpart in sigrok: libsigrok/src/output/ascii.c,
-//   Copyright (C) 2011 Haavard Espeland <gus@ping.uio.no>,
-//   Copyright (C) 2014 Bert Vermeulen <bert@biot.com>.
+// Counterpart in sigrok:
+//   libsigrok/src/output/ascii.c,
+//   Copyright (C) 2011 Håvard Espeland <gus@ping.uio.no>,
+//   Copyright (C) 2014 Bert Vermeulen <bert@biot.com>,
+//   with commits by Gerhard Sittig, Daniel Elstner, Uwe Hermann, v1ne,
+//   Joel Holdsworth, Martin Ling, Soeren Apel
+//   (libsigrok libsigrok-unreleased-1855-g20baa77f).
 // This file is an independent implementation written for oxrok from the
-// observed behaviour and the public interfaces.
+//   observed behaviour and the public interfaces.
 
 //! `ascii`: one line per channel drawn with characters for low, high,
 //! falling and rising samples.

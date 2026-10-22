@@ -1,7 +1,11 @@
-// Counterpart in sigrok: libsigrok/src/output/output.c,
-//   Copyright (C) 2014 Bert Vermeulen <bert@biot.com>.
+// Counterpart in sigrok:
+//   libsigrok/src/output/output.c,
+//   Copyright (C) 2014 Bert Vermeulen <bert@biot.com>,
+//   with commits by Uwe Hermann, Daniel Elstner, Soeren Apel,
+//   Joel Holdsworth, Marc Jacobi, Marc Schink, Mike Meyer
+//   (libsigrok libsigrok-unreleased-1855-g20baa77f).
 // This file is an independent implementation written for oxrok from the
-// observed behaviour and the public interfaces.
+//   observed behaviour and the public interfaces.
 
 //! Output modules turn packets into text or bytes.
 

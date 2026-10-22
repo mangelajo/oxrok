@@ -1,7 +1,11 @@
-// Counterpart in sigrok: libsigrok/src/error.c,
-//   Copyright (C) 2012 Uwe Hermann <uwe@hermann-uwe.de>.
+// Counterpart in sigrok:
+//   libsigrok/src/error.c,
+//   Copyright (C) 2012 Uwe Hermann <uwe@hermann-uwe.de>,
+//   with commits by Bert Vermeulen, Daniel Elstner, Bartosz Golaszewski,
+//   Gerhard Sittig
+//   (libsigrok libsigrok-unreleased-1855-g20baa77f).
 // This file is an independent implementation written for oxrok from the
-// observed behaviour and the public interfaces.
+//   observed behaviour and the public interfaces.
 
 //! The error type shared by every oxrok crate.
 

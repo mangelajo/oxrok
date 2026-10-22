@@ -1,9 +1,12 @@
-// Counterpart in sigrok: libsigrok/src/output/vcd.c,
+// Counterpart in sigrok:
+//   libsigrok/src/output/vcd.c,
 //   Copyright (C) 2010 Uwe Hermann <uwe@hermann-uwe.de>,
 //   Copyright (C) 2013 Bert Vermeulen <bert@biot.com>,
-//   Copyright (C) 2017-2020 Gerhard Sittig <gerhard.sittig@gmx.net>.
+//   Copyright (C) 2017-2020 Gerhard Sittig <gerhard.sittig@gmx.net>,
+//   with commits by Daniel Elstner, Soeren Apel, Joel Holdsworth, Martin Ling
+//   (libsigrok libsigrok-unreleased-1855-g20baa77f).
 // This file is an independent implementation written for oxrok from the
-// observed behaviour and the public interfaces.
+//   observed behaviour and the public interfaces.
 
 //! `vcd`: a Value Change Dump, readable by waveform viewers and by the `vcd`
 //! input.

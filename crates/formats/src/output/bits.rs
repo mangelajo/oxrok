@@ -1,7 +1,11 @@
-// Counterpart in sigrok: libsigrok/src/output/bits.c,
-//   Copyright (C) 2014 Bert Vermeulen <bert@biot.com>.
+// Counterpart in sigrok:
+//   libsigrok/src/output/bits.c,
+//   Copyright (C) 2014 Bert Vermeulen <bert@biot.com>,
+//   with commits by Daniel Elstner, Gerhard Sittig, Uwe Hermann,
+//   Joel Holdsworth, Martin Ling, Soeren Apel
+//   (libsigrok libsigrok-unreleased-1855-g20baa77f).
 // This file is an independent implementation written for oxrok from the
-// observed behaviour and the public interfaces.
+//   observed behaviour and the public interfaces.
 
 //! `bits`: one line per channel, `0` and `1` per sample, a space every
 //! eight samples.

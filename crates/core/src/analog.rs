@@ -1,7 +1,12 @@
-// Counterpart in sigrok: libsigrok/src/analog.c,
-//   Copyright (C) 2014 Bert Vermeulen <bert@biot.com>.
+// Counterpart in sigrok:
+//   libsigrok/src/analog.c,
+//   Copyright (C) 2014 Bert Vermeulen <bert@biot.com>,
+//   with commits by Uwe Hermann, Martin Ling, Aurelien Jacobs, Stefan Brüns,
+//   Daniel Elstner, Alexandru Gagniuc, Frank Stettner, Gerhard Sittig,
+//   Marek Vasut, Timo Kokkonen
+//   (libsigrok libsigrok-unreleased-1855-g20baa77f).
 // This file is an independent implementation written for oxrok from the
-// observed behaviour and the public interfaces.
+//   observed behaviour and the public interfaces.
 
 //! Measured quantities, their flags and units, for analog data.
 

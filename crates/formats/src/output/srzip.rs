@@ -1,7 +1,12 @@
-// Counterpart in sigrok: libsigrok/src/output/srzip.c,
-//   Copyright (C) 2014 Bert Vermeulen <bert@biot.com>.
+// Counterpart in sigrok:
+//   libsigrok/src/output/srzip.c,
+//   Copyright (C) 2014 Bert Vermeulen <bert@biot.com>,
+//   with commits by Gerhard Sittig, Uwe Hermann, Daniel Elstner, Martin Ling,
+//   Soeren Apel, Lars-Peter Clausen, Aurelien Jacobs, J. Neuschäfer,
+//   Joel Holdsworth, Stefan Brüns
+//   (libsigrok libsigrok-unreleased-1855-g20baa77f).
 // This file is an independent implementation written for oxrok from the
-// observed behaviour and the public interfaces.
+//   observed behaviour and the public interfaces.
 
 //! `srzip`: a sigrok session file. Needs a file name.
 

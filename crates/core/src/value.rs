@@ -1,9 +1,15 @@
-// Counterpart in sigrok: sigrok-cli/parsers.c,
+// Counterpart in sigrok:
+//   sigrok-cli/parsers.c,
 //   libsigrok/src/strutil.c,
 //   Copyright (C) 2011 Bert Vermeulen <bert@biot.com>,
-//   Copyright (C) 2010 Uwe Hermann <uwe@hermann-uwe.de>.
+//   Copyright (C) 2010 Uwe Hermann <uwe@hermann-uwe.de>,
+//   with commits by Gerhard Sittig, Daniel Elstner, Jens Steinhauser,
+//   Alexandru Gagniuc, Anatoly Sokolov, poljar (Damir Jelić), Frank Stettner,
+//   Stefan Brüns, Andreas Sandberg, Aurelien Jacobs, Niklas Thorne,
+//   Soeren Apel
+//   (libsigrok libsigrok-unreleased-1855-g20baa77f, sigrok-cli sigrok-cli-unreleased-103-gf44dd91).
 // This file is an independent implementation written for oxrok from the
-// observed behaviour and the public interfaces.
+//   observed behaviour and the public interfaces.
 
 //! Configuration values and their kinds.
 

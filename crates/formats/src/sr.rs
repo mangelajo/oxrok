@@ -1,10 +1,15 @@
-// Counterpart in sigrok: libsigrok/src/session_file.c,
+// Counterpart in sigrok:
+//   libsigrok/src/session_file.c,
 //   libsigrok/src/session_driver.c,
 //   libsigrok/src/output/srzip.c,
 //   Copyright (C) 2013 Bert Vermeulen <bert@biot.com>,
-//   Copyright (C) 2014 Bert Vermeulen <bert@biot.com>.
+//   Copyright (C) 2014 Bert Vermeulen <bert@biot.com>,
+//   with commits by Uwe Hermann, Martin Ling, Daniel Elstner, Soeren Apel,
+//   Aurelien Jacobs, Lars-Peter Clausen, Gerhard Sittig, J. Neuschäfer,
+//   Joel Holdsworth, Stefan Brüns
+//   (libsigrok libsigrok-unreleased-1855-g20baa77f).
 // This file is an independent implementation written for oxrok from the
-// observed behaviour and the public interfaces.
+//   observed behaviour and the public interfaces.
 
 //! The sigrok session file format (`.sr`).
 //!
