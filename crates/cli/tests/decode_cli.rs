@@ -56,10 +56,23 @@ fn uart_binary_output() {
 #[test]
 fn decoder_listing_and_errors() {
     let (out, _, _) = oxrok(&["-L"]);
+    // Python decoders may sit between the native ones in the listing.
     assert!(out.contains(
-        "Supported protocol decoders:\n  i2c                  Inter-Integrated Circuit\n"
+        "Supported protocol decoders:
+"
     ));
-    assert!(out.contains("  spi                  Serial Peripheral Interface\n  uart                 Universal Asynchronous Receiver/Transmitter\n"));
+    assert!(out.contains(
+        "  i2c                  Inter-Integrated Circuit
+"
+    ));
+    assert!(out.contains(
+        "  spi                  Serial Peripheral Interface
+"
+    ));
+    assert!(out.contains(
+        "  uart                 Universal Asynchronous Receiver/Transmitter
+"
+    ));
     let (out, _, ok) = oxrok(&["-P", "uart", "--show"]);
     assert!(ok);
     assert!(out.starts_with("ID: uart\nName: UART\n"));
@@ -114,4 +127,63 @@ fn spi_annotations_match_libsigrokdecode() {
         .output()
         .unwrap();
     assert_eq!(out.stdout, [0x3c, 0xff, 0x7e]);
+}
+
+/// The Python host, with the python feature and a libsigrokdecode
+/// installation. Without the decoders the tests pass vacuously and say
+/// so.
+#[cfg(feature = "python")]
+mod python {
+    use super::*;
+
+    fn available() -> bool {
+        let (out, _, _) = oxrok(&["-L"]);
+        if out.contains("\n  timing ") {
+            return true;
+        }
+        eprintln!("no libsigrokdecode decoders found, skipping");
+        false
+    }
+
+    #[test]
+    fn timing_decoder_runs_unchanged() {
+        if !available() {
+            return;
+        }
+        let (out, _, ok) = oxrok(&["-l", "4", "-i", VCD, "-P", "timing"]);
+        assert!(ok);
+        assert_eq!(out, include_str!("fixtures/uart-hi-timing.ann"));
+    }
+
+    #[test]
+    fn native_to_python_chain_keeps_order() {
+        if !available() {
+            return;
+        }
+        let (out, _, ok) = oxrok(&["-i", I2C, "-P", "i2c,eeprom24xx"]);
+        assert!(ok);
+        let lines: Vec<&str> = out.lines().collect();
+        assert_eq!(lines[0], "i2c-1: Start");
+        assert_eq!(lines[1], "eeprom24xx-1: Control code bits: 1010");
+        assert!(lines.iter().any(|l| l.starts_with("eeprom24xx-1: Data byte")), "{out}");
+        // A decoder exception on one item does not stop the chain.
+        let (out, err, ok) = oxrok(&["-i", I2C, "-P", "i2c,rtc8564"]);
+        assert!(ok);
+        assert!(err.contains("handle_reg_0x55"), "{err}");
+        assert!(out.contains("rtc8564-1: Write date/time"), "{out}");
+    }
+
+    #[test]
+    fn python_decoder_show_and_options() {
+        if !available() {
+            return;
+        }
+        let (out, _, ok) = oxrok(&["-P", "eeprom24xx", "--show"]);
+        assert!(ok);
+        assert!(out.starts_with("ID: eeprom24xx\n"));
+        assert!(out.contains("- chip: Chip ("), "{out}");
+        let (_, err, ok) = oxrok(&["-i", I2C, "-P", "i2c,eeprom24xx:chip=nosuch"]);
+        assert!(!ok);
+        assert!(err.contains("Invalid value 'nosuch'"), "{err}");
+    }
 }

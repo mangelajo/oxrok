@@ -11,6 +11,7 @@ members = [
     "crates/drivers/fx2lafw",
     "crates/decode",
     "crates/decoders",
+    "crates/pydecode",
     "crates/cli",
     "crates/hil",
 ]
@@ -34,6 +35,7 @@ oxrok-driver-logicport = { path = "crates/drivers/logicport", version = "0.1.0" 
 oxrok-driver-fx2lafw = { path = "crates/drivers/fx2lafw", version = "0.1.0" }
 oxrok-decode = { path = "crates/decode", version = "0.1.0" }
 oxrok-decoders = { path = "crates/decoders", version = "0.1.0" }
+oxrok-pydecode = { path = "crates/pydecode", version = "0.1.0" }
 log = "0.4"
 thiserror = "2"
 clap = { version = "4", features = ["derive"] }

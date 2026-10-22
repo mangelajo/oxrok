@@ -81,6 +81,11 @@ release may change the library API.
   `--protocol-decoder-ann-class`, `-P dec --show` and the decoder
   section of `-L`. Their output is identical to sigrok-cli's in every
   mode on synthetic captures.
+- Stacked decoders (`-P i2c,eeprom24xx`), synchronous as in
+  libsigrokdecode, and `oxrok-pydecode` behind the `python` feature of
+  the CLI: libsigrokdecode's Python decoders run unchanged on the same
+  runtime through PyO3. All 112 upstream decoders load; the checked
+  ones print what sigrok-cli prints.
 - `oxrok-driver-fx2lafw`: Saleae Logic clones, USBee, Cypress FX2 and
   sigrok FX2 LA boards, 8 or 16 channels, with the firmware upload and
   the software trigger. Verified on a Saleae Logic clone: firmware

@@ -10,6 +10,7 @@
 //! A small stderr logger driven by `-l`.
 
 use log::{Level, LevelFilter, Log, Metadata, Record};
+use std::io::Write as _;
 use std::sync::atomic::{AtomicU8, AtomicUsize, Ordering};
 
 /// The level selected with `-l`, as a `LevelFilter` discriminant.
@@ -52,7 +53,9 @@ impl Log for Stderr {
                 Level::Debug => "dbg",
                 Level::Trace => "spew",
             };
-            eprintln!("oxrok: {level}: {}: {}", record.target(), record.args());
+            // A closed stderr must not take the process down.
+            let mut err = std::io::stderr().lock();
+            let _ = writeln!(err, "oxrok: {level}: {}: {}", record.target(), record.args());
         }
     }
 

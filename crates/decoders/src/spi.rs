@@ -89,7 +89,11 @@ any word size.",
 };
 
 /// The decoder definition for the registry.
-pub static DEF: DecoderDef = DecoderDef { info: &INFO, new: || Box::new(Spi::default()) };
+pub static DEF: DecoderDef = DecoderDef { info: &INFO, new: &boxed };
+
+fn boxed() -> Box<dyn Decoder> {
+    Box::new(Spi::default())
+}
 
 /// A decoded word: start, end, value.
 #[derive(Clone, Copy)]

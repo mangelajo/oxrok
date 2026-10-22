@@ -17,10 +17,11 @@ and two hardware drivers: the Intronix LogicPort LA1034, checked against
 the libsigrok driver byte for byte and against a signal generator on the
 bench, and fx2lafw for Saleae Logic clones and other FX2 boards, with
 the firmware upload. Native `uart`, `i2c` and `spi` decoders print what
-libsigrokdecode prints. See `docs/ROADMAP.md`.
+libsigrokdecode prints, and with the `python` feature the unchanged
+libsigrokdecode decoders run too. See `docs/ROADMAP.md`.
 
 ```sh
-cargo install --path crates/cli
+cargo install --path crates/cli                    # add --features python for the Python decoders
 oxrok --scan
 oxrok -d demo:logic_channels=4 -g Logic -c pattern=walking-one --samples 20 -O bits
 oxrok -d demo --show
@@ -47,6 +48,7 @@ for the same command, which is how the test suite checks it.
 | `oxrok-driver-fx2lafw` | FX2 based analyzers running the sigrok fx2lafw firmware |
 | `oxrok-decode` | the decoder API, the sample scanner behind `wait`, instance threads |
 | `oxrok-decoders` | native decoders: `uart`, `i2c`, `spi` |
+| `oxrok-pydecode` | runs libsigrokdecode's Python decoders (feature `python`) |
 | `oxrok-hil` | hardware in the loop checks, not published |
 | `oxrok` | the command line tool |
 

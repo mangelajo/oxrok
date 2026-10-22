@@ -12,6 +12,8 @@ categories = ["command-line-utilities", "hardware-support"]
 
 [features]
 default = []
+# Run libsigrokdecode's Python decoders through the system Python.
+python = ["dep:oxrok-pydecode"]
 # Add the libusb backend; OXROK_USB_BACKEND=libusb selects it.
 libusb = ["oxrok-usb/libusb"]
 
@@ -30,6 +32,7 @@ oxrok-driver-logicport.workspace = true
 oxrok-driver-fx2lafw.workspace = true
 oxrok-decode.workspace = true
 oxrok-decoders.workspace = true
+oxrok-pydecode = { workspace = true, optional = true }
 oxrok-usb = { workspace = true, features = ["nusb"] }
 clap.workspace = true
 log.workspace = true

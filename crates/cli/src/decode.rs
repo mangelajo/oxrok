@@ -21,6 +21,10 @@ use std::sync::mpsc::Receiver;
 pub fn registry() -> Registry {
     let mut r = Registry::new();
     r.register(&oxrok_decoders::ALL);
+    // Python decoders come after the native ones, which win on an id
+    // both have.
+    #[cfg(feature = "python")]
+    r.register(&oxrok_pydecode::defs());
     r
 }
 
@@ -28,7 +32,9 @@ pub fn registry() -> Registry {
 type Visible = HashMap<&'static str, Option<Vec<usize>>>;
 /// An instance waiting for the first logic packet: id, configuration
 /// and constructor.
-type Pending = (String, Config, fn() -> Box<dyn Decoder>);
+type Pending = (String, Config, &'static (dyn Fn() -> Box<dyn Decoder> + Send + Sync));
+/// A chain of pending instances, bottom first.
+type PendingChain = Vec<Pending>;
 
 struct Instance {
     id: String,
@@ -49,7 +55,7 @@ pub struct Decoding {
     show_class: bool,
     show_abbrev: bool,
     samplerate: u64,
-    pending: Vec<Pending>,
+    pending: Vec<PendingChain>,
     ended: usize,
 }
 
@@ -70,24 +76,38 @@ impl Decoding {
         let mut pending = Vec::new();
         let mut counts: HashMap<&str, usize> = HashMap::new();
         for spec in &args.decoders {
-            let mut parts = spec.split(',');
-            let first = parts.next().unwrap_or_default();
-            if parts.next().is_some() {
-                return Err(Error::not_supported("stacked decoders are not implemented yet"));
+            let mut chain: PendingChain = Vec::new();
+            let mut below: Option<&'static DecoderInfo> = None;
+            for part in spec.split(',') {
+                let parsed = parse::generic_args(part, true);
+                let id =
+                    parsed.scope.ok_or_else(|| Error::arg("Invalid decoder specification."))?;
+                let def = registry
+                    .find(&id)
+                    .ok_or_else(|| Error::Arg(format!("Protocol decoder '{id}' not found.")))?;
+                if let Some(b) = below
+                    && !def.info.inputs.iter().any(|i| b.outputs.contains(i))
+                {
+                    // libsigrokdecode runs such a stack anyway; the upper
+                    // decoder then gets items it cannot use.
+                    log::warn!(
+                        "Protocol decoder '{}' does not take the output of '{}'.",
+                        def.info.id,
+                        b.id
+                    );
+                }
+                let pairs: Vec<(String, String)> =
+                    parsed.items.into_iter().map(|(k, v)| (k, v.unwrap_or_default())).collect();
+                let channel_names: &[String] = if below.is_none() { &names } else { &[] };
+                let config = oxrok_decode::parse_spec(def.info, &pairs, channel_names)?;
+                let n = counts.entry(def.info.id).or_insert(0);
+                *n += 1;
+                let inst_id = format!("{}-{n}", def.info.id);
+                instances.push(Instance { id: inst_id.clone(), info: def.info });
+                chain.push((inst_id, config, def.new));
+                below = Some(def.info);
             }
-            let parsed = parse::generic_args(first, true);
-            let id = parsed.scope.ok_or_else(|| Error::arg("Invalid decoder specification."))?;
-            let def = registry
-                .find(&id)
-                .ok_or_else(|| Error::Arg(format!("Protocol decoder '{id}' not found.")))?;
-            let pairs: Vec<(String, String)> =
-                parsed.items.into_iter().map(|(k, v)| (k, v.unwrap_or_default())).collect();
-            let config = oxrok_decode::parse_spec(def.info, &pairs, &names)?;
-            let n = counts.entry(def.info.id).or_insert(0);
-            *n += 1;
-            let inst_id = format!("{}-{n}", def.info.id);
-            instances.push(Instance { id: inst_id.clone(), info: def.info });
-            pending.push((inst_id, config, def.new));
+            pending.push(chain);
         }
         let mut ann_visible: Visible = HashMap::new();
         if args.decoder_annotations.is_empty()
@@ -176,8 +196,10 @@ impl Decoding {
 
     fn start(&mut self, unit_size: usize) -> Result<()> {
         let mut stack = Stack::new();
-        for (id, config, new) in self.pending.drain(..) {
-            stack.add(id, new(), &config, unit_size, self.samplerate)?;
+        for chain in self.pending.drain(..) {
+            let built: Vec<(String, Box<dyn Decoder>, Config)> =
+                chain.into_iter().map(|(id, config, new)| (id, new(), config)).collect();
+            stack.add_chain(built, unit_size, self.samplerate)?;
         }
         self.outputs = stack.outputs();
         self.stack = Some(stack);
@@ -229,6 +251,8 @@ impl Decoding {
     fn drain(&mut self, out: &mut dyn Write, all: bool) -> Result<()> {
         let Some(rx) = &self.outputs else { return Ok(()) };
         loop {
+            // `recv` ends when every decoder thread is gone, so a thread
+            // that died without its End marker cannot hang the drain.
             let next = if all { rx.recv().ok() } else { rx.try_recv().ok() };
             let Some(o) = next else { return Ok(()) };
             self.print(&o, out)?;

@@ -149,7 +149,20 @@ case_ "spi transfers" --keep-header -- -i "$SPI" -P spi -A spi=mosi-transfer:mis
 case_ "spi binary" --keep-header -- -i "$SPI" -P spi -B spi=miso
 # The documentation text is oxrok's own, and this libsigrokdecode build
 # predates decoder tags.
-case_ "decoder show uart" --keep-header --names --filter '/^Documentation:/,$d; /^Decoder tags:/,/^Annotation classes:/{/^- /d;}' -- -P uart --show
+case_ "decoder show uart" --keep-header --names --filter '/^Documentation:/,$d; /^Decoder tags:/,/^Annotation classes:/{/^- /d;/^None\.$/d;}' -- -P uart --show
+
+# Python decoders, when oxrok was built with the python feature.
+if "$OXROK" -L 2>/dev/null | grep -q '^  timing '; then
+    case_ "python timing" --keep-header -- -l 4 -i "$UART" -P timing
+    case_ "python timing options" --keep-header -- -i "$UART" -P timing:edge=rising:avg_period=3
+    case_ "python chain uart midi" --keep-header -- -l 4 -i "$UART" -P uart,midi
+    case_ "python chain i2c eeprom24xx" --keep-header -- -i "$I2C" -P i2c,eeprom24xx
+    case_ "python chain i2c rtc8564" --keep-header -- -i "$I2C" -P i2c,rtc8564
+    case_ "python chain spi sdcard" --keep-header -- -l 4 -i "$SPI" -P spi,sdcard_spi
+    case_ "python parallel" --keep-header -- -l 4 -i "$SPI" -P parallel:clk=top.clk:d0=top.mosi
+    case_ "python decoder show eeprom24xx" --keep-header --names --filter '/^Documentation:/,$d; /^Decoder tags:/,/^Annotation classes:/{/^- /d;/^None\.$/d;}' -- -P eeprom24xx --show
+    case_ "decoder listing" --keep-header --filter '1,/^Supported protocol decoders:/d' --names -- -L
+fi
 
 if [ $hw = 1 ]; then
     LP="intronix-logicport"

@@ -50,8 +50,8 @@ Deliberate, and kept small:
 
 ## Not available yet
 
-- Stacked decoders (`-P uart,midi`), Python decoders, the
-  `--protocol-decoder-jsontrace` output; `docs/DECODERS.md`.
+- `--protocol-decoder-jsontrace`. Python decoders need the `python`
+  build feature; `docs/DECODERS.md`.
 - `-T` (transform modules), `--list-supported-wiki`, the `gnuplot` and
   `scale` options of the `csv` output.
 - The `csv` input and the other long tail input modules (ChronoVu LA8,

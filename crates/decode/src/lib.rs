@@ -43,7 +43,7 @@ pub enum OutputKind {
 }
 
 /// An item passed from one decoder to the one stacked on it.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone)]
 pub enum Item {
     /// A string, e.g. a state name.
     Str(String),
@@ -59,6 +59,25 @@ pub enum Item {
     Bool(bool),
     /// Nothing.
     None,
+    /// A host specific object passed between decoders of the same host
+    /// unchanged, e.g. a Python object between two Python decoders.
+    Opaque(std::sync::Arc<dyn std::any::Any + Send + Sync>),
+}
+
+impl PartialEq for Item {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Item::Str(a), Item::Str(b)) => a == b,
+            (Item::Int(a), Item::Int(b)) => a == b,
+            (Item::Float(a), Item::Float(b)) => a == b,
+            (Item::List(a), Item::List(b)) => a == b,
+            (Item::Bytes(a), Item::Bytes(b)) => a == b,
+            (Item::Bool(a), Item::Bool(b)) => a == b,
+            (Item::None, Item::None) => true,
+            (Item::Opaque(a), Item::Opaque(b)) => std::sync::Arc::ptr_eq(a, b),
+            _ => false,
+        }
+    }
 }
 
 /// What a decoder emitted.
@@ -124,8 +143,9 @@ pub enum Output {
     },
 }
 
-/// What a decoder sees while decoding.
-pub trait Context {
+/// What a decoder sees while decoding. Contexts move with their
+/// decoder's thread, so they are `Send`.
+pub trait Context: Send {
     /// Waits for one of the condition groups to match (each group is a
     /// conjunction). Returns the pin levels at that sample, or
     /// [`Error::Eof`] at the end of the data. With no groups, advances
@@ -154,6 +174,12 @@ pub trait Context {
     fn put_meta(&mut self, ss: u64, es: u64, name: &str, item: Item);
 }
 
+impl std::fmt::Debug for Item {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{self}")
+    }
+}
+
 impl std::fmt::Display for Item {
     /// As sigrok-cli prints metadata values: numbers bare, strings in
     /// single quotes, lists in brackets.
@@ -165,6 +191,7 @@ impl std::fmt::Display for Item {
             Item::Bool(b) => write!(f, "{b}"),
             Item::None => write!(f, "None"),
             Item::Bytes(b) => write!(f, "{b:?}"),
+            Item::Opaque(_) => write!(f, "<object>"),
             Item::List(items) => {
                 write!(f, "[")?;
                 for (i, it) in items.iter().enumerate() {
@@ -246,7 +273,7 @@ pub struct DecoderDef {
     /// Its description.
     pub info: &'static DecoderInfo,
     /// Creates a fresh instance.
-    pub new: fn() -> Box<dyn Decoder>,
+    pub new: &'static (dyn Fn() -> Box<dyn Decoder> + Send + Sync),
 }
 
 /// The decoders a program knows about.
@@ -341,18 +368,30 @@ pub fn parse_spec(
     Ok(config)
 }
 
-/// One running decoder instance.
+/// One running chain: the bottom decoder's thread and its stream.
 struct Running {
-    instance: String,
     handle: Option<JoinHandle<()>>,
     writer: StreamWriter,
+    /// Ids of the whole chain, bottom first.
+    chain: Vec<String>,
 }
 
-/// A set of decoder instances fed from one logic stream. Stacking is
-/// not implemented yet: every instance reads the logic input.
+/// A decoder stacked on the one below: it gets that decoder's Python
+/// output items, synchronously, as libsigrokdecode does, so the
+/// annotations of a chain come out in the same order. An item the
+/// decoder fails on is logged and the next one is delivered anyway,
+/// which is also what libsigrokdecode does.
+struct Link {
+    decoder: Box<dyn Decoder>,
+    ctx: ThreadContext,
+}
+
+/// A set of decoder chains fed from one logic stream.
 pub struct Stack {
     running: Vec<Running>,
-    tx: Sender<Output>,
+    /// Dropped by `end`, so the receiver sees the end once every
+    /// decoder thread is gone, even one that died.
+    tx: Option<Sender<Output>>,
     rx: Option<Receiver<Output>>,
     unit_size: usize,
 }
@@ -367,7 +406,7 @@ impl Stack {
     /// An empty stack.
     pub fn new() -> Self {
         let (tx, rx) = channel();
-        Stack { running: Vec::new(), tx, rx: Some(rx), unit_size: 0 }
+        Stack { running: Vec::new(), tx: Some(tx), rx: Some(rx), unit_size: 0 }
     }
 
     /// Adds an instance and starts its thread. `unit_size` is the bytes
@@ -375,43 +414,88 @@ impl Stack {
     pub fn add(
         &mut self,
         instance: String,
-        mut decoder: Box<dyn Decoder>,
+        decoder: Box<dyn Decoder>,
         config: &Config,
         unit_size: usize,
         samplerate: u64,
     ) -> Result<()> {
+        self.add_chain(vec![(instance, decoder, config.clone())], unit_size, samplerate)
+    }
+
+    /// Adds a chain: the first decoder reads the logic input, each next
+    /// one the Python output of the one before it.
+    pub fn add_chain(
+        &mut self,
+        chain: Vec<(String, Box<dyn Decoder>, Config)>,
+        unit_size: usize,
+        samplerate: u64,
+    ) -> Result<()> {
         self.unit_size = unit_size;
-        decoder.start(config)?;
+        let mut iter = chain.into_iter();
+        let Some((instance, mut decoder, config)) = iter.next() else {
+            return Err(Error::arg("empty decoder chain"));
+        };
+        decoder.start(&config)?;
         if samplerate > 0 {
             decoder.metadata(samplerate);
         }
+        let mut uppers = Vec::new();
+        let mut ids = vec![instance.clone()];
+        for (id, mut dec, cfg) in iter {
+            dec.start(&cfg)?;
+            if samplerate > 0 {
+                dec.metadata(samplerate);
+            }
+            ids.push(id.clone());
+            uppers.push((id, dec, cfg));
+        }
         let (stream, writer) = Stream::new(unit_size, config.channels.clone());
-        let tx = self.tx.clone();
+        let tx = self.tx.clone().ok_or_else(|| Error::device("decoder stack already ended"))?;
         let name = instance.clone();
         let handle = std::thread::Builder::new()
             .name(format!("decoder {instance}"))
             .spawn(move || {
+                // Sends End for the chain when the thread ends, also by
+                // a panic.
+                let guard = EndGuard { tx: tx.clone(), ids: ids_for_guard(&name, &uppers) };
+                // Build the chain top down so each link owns the next.
+                let mut upper: Option<Box<Link>> = None;
+                for (id, dec, cfg) in uppers.into_iter().rev() {
+                    let (s, _) = Stream::new(unit_size, cfg.channels.clone());
+                    let ctx = ThreadContext {
+                        stream: s,
+                        tx: tx.clone(),
+                        instance: id,
+                        matched: Vec::new(),
+                        upper: upper.take(),
+                        bottom: false,
+                    };
+                    upper = Some(Box::new(Link { decoder: dec, ctx }));
+                }
                 let mut ctx = ThreadContext {
                     stream,
                     tx: tx.clone(),
                     instance: name.clone(),
                     matched: Vec::new(),
+                    upper,
+                    bottom: true,
                 };
                 let r = decoder.decode(&mut ctx);
                 let error = match r {
                     Ok(()) | Err(Error::Eof) => None,
                     Err(e) => Some(e.to_string()),
                 };
-                let _ = tx.send(Output::End { instance: name, error });
+                drop(ctx);
+                guard.finish(error.as_deref());
             })
             .map_err(Error::Io)?;
-        self.running.push(Running { instance, handle: Some(handle), writer });
+        self.running.push(Running { handle: Some(handle), writer, chain: ids });
         Ok(())
     }
 
     /// The instances' ids, in order.
     pub fn instances(&self) -> Vec<String> {
-        self.running.iter().map(|r| r.instance.clone()).collect()
+        self.running.iter().flat_map(|r| r.chain.iter().cloned()).collect()
     }
 
     /// Feeds logic samples to every instance.
@@ -429,6 +513,7 @@ impl Stack {
         for r in &self.running {
             r.writer.end();
         }
+        self.tx = None;
     }
 
     /// Takes the output receiver. Outputs arrive in emission order per
@@ -454,15 +539,53 @@ impl Drop for Stack {
     }
 }
 
+/// The chain's instance ids, bottom first.
+fn ids_for_guard(bottom: &str, uppers: &[(String, Box<dyn Decoder>, Config)]) -> Vec<String> {
+    let mut ids = vec![bottom.to_owned()];
+    ids.extend(uppers.iter().map(|u| u.0.clone()));
+    ids
+}
+
+/// Sends `End` for every instance of a chain exactly once.
+struct EndGuard {
+    tx: Sender<Output>,
+    ids: Vec<String>,
+}
+
+impl EndGuard {
+    fn finish(mut self, error: Option<&str>) {
+        let ids = std::mem::take(&mut self.ids);
+        for (i, id) in ids.into_iter().enumerate() {
+            let e = if i == 0 { error.map(str::to_owned) } else { None };
+            let _ = self.tx.send(Output::End { instance: id, error: e });
+        }
+    }
+}
+
+impl Drop for EndGuard {
+    fn drop(&mut self) {
+        let error = std::thread::panicking().then(|| "decoder thread panicked".to_owned());
+        for id in std::mem::take(&mut self.ids) {
+            let _ = self.tx.send(Output::End { instance: id, error: error.clone() });
+        }
+    }
+}
+
 struct ThreadContext {
     stream: Stream,
     tx: Sender<Output>,
     instance: String,
     matched: Vec<bool>,
+    upper: Option<Box<Link>>,
+    /// False for a stacked decoder, which has no sample stream.
+    bottom: bool,
 }
 
 impl Context for ThreadContext {
     fn wait(&mut self, conds: &[&[Cond]]) -> Result<Pins> {
+        if !self.bottom {
+            return Err(Error::not_supported("a stacked decoder has no sample stream"));
+        }
         let (pins, matched) = self.stream.wait(conds)?;
         self.matched = matched;
         Ok(pins)
@@ -496,6 +619,11 @@ impl Context for ThreadContext {
     }
 
     fn put_python(&mut self, ss: u64, es: u64, item: Item) {
+        if let Some(link) = &mut self.upper
+            && let Err(e) = link.decoder.decode_item(ss, es, &item, &mut link.ctx)
+        {
+            log::warn!("{}: {e}", link.ctx.instance);
+        }
         let _ = self.tx.send(Output::Python { instance: self.instance.clone(), ss, es, item });
     }
 

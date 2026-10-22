@@ -55,10 +55,33 @@ and is written from the protocol and the decoder's documented output.
 
 ## Python decoders
 
-The plan is to run unchanged `pd.py` files from an existing
-libsigrokdecode installation through a host that provides the
-`sigrokdecode` module on top of the same runtime. The interpreter spike
-on 2026-10-22:
+With the `python` cargo feature (`cargo install --path crates/cli
+--features python`) oxrok runs the unchanged `pd.py` files of a
+libsigrokdecode installation. The decoders are looked for in
+`OXROK_DECODERS_DIR`, `SIGROKDECODE_DIR`, `~/.local/share/libsigrokdecode/decoders`
+and the system directories. Native decoders take precedence over a
+Python decoder of the same id.
+
+`oxrok-pydecode` provides the `sigrokdecode` module the decoders
+import: the `Decoder` base class with `wait`, `put`, `register` and
+`has_channel`, the output constants and `SRD_CONF_SAMPLERATE`. Each
+Python decoder is a runtime `Decoder`; its `decode` runs on the
+instance's thread with the interpreter attached, `wait` releases the
+interpreter while it blocks for samples, and `options`, `samplenum`
+and `matched` are set on the instance as libsigrokdecode does. All 112
+decoders of libsigrokdecode 0.5.3 load; `timing`, chains such as
+`uart,midi`, `i2c,eeprom24xx`, `i2c,rtc8564`, `spi,sdcard_spi` and
+`parallel` print what sigrok-cli prints.
+
+Stacking is synchronous: a decoder's Python output is handed to the
+decoder above before the lower one continues, so annotations of a chain
+interleave as in libsigrokdecode. An exception in the upper decoder on
+one item is logged and the next item is delivered anyway, which is
+also libsigrokdecode's behaviour. Items pass between two Python
+decoders as the original objects; between a native and a Python decoder
+they are converted (lists, numbers, strings, bytes, None).
+
+The interpreter choice came from the spike on 2026-10-22:
 
 - PyO3 0.30 with the system Python 3.14 ran the unmodified `uart`
   decoder with a Rust `wait` behind it at 3 million samples per second
@@ -70,11 +93,10 @@ on 2026-10-22:
   conflict. It stays an option for a static binary later, behind the
   same host interface, when a consistent release exists.
 
-So the host uses PyO3 behind a `python` cargo feature; the default
-build has no Python dependency.
+The default build has no Python dependency.
 
 ## Not yet
 
-Stacked decoders (`-P uart,midi`), the Python host, and conformance
-fixtures from real captures (the bench's signal generator has UART,
-I2C and SPI commands for that).
+Conformance fixtures from real captures (the bench's signal generator
+has UART, I2C and SPI commands for that), `--protocol-decoder-jsontrace`,
+and a Python host that needs no interpreter on the machine.

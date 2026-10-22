@@ -69,7 +69,11 @@ the ACK or NACK after each byte.",
 };
 
 /// The decoder definition for the registry.
-pub static DEF: DecoderDef = DecoderDef { info: &INFO, new: || Box::new(I2c::default()) };
+pub static DEF: DecoderDef = DecoderDef { info: &INFO, new: &boxed };
+
+fn boxed() -> Box<dyn Decoder> {
+    Box::new(I2c::default())
+}
 
 /// Protocol events: class index, long and short text.
 #[derive(Clone, Copy, PartialEq, Eq)]

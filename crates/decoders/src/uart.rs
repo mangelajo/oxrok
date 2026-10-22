@@ -186,7 +186,11 @@ bits (1), in this order. It can run on one line (RX or TX) or on both.",
 };
 
 /// The decoder definition for the registry.
-pub static DEF: DecoderDef = DecoderDef { info: &INFO, new: || Box::new(Uart::default()) };
+pub static DEF: DecoderDef = DecoderDef { info: &INFO, new: &boxed };
+
+fn boxed() -> Box<dyn Decoder> {
+    Box::new(Uart::default())
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum State {
