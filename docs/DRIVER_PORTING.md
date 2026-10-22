@@ -95,6 +95,29 @@ command, then loop on `next` until the sample limit or the stop flag.
 `PreTriggerBuffer` keeps the capture ratio's worth of samples before
 it. Firmware uploads use `oxrok-ezusb` and `wait_for_renumeration`.
 
+## Beyond libsigrok's keys
+
+A device may do more than libsigrok's key set covers. Two hooks:
+
+- `Key::Custom(&'static CustomKey)` in the device's option table. The
+  key has an id, a name, a description and a value kind; `-c`, `--get`
+  and `--show` resolve it through `oxrok_core::resolve_key`, so it works
+  like a well known key. Keep ids lower case with underscores, keep the
+  value strings short (`off`, `active-high`), and put a read that takes
+  time (a measurement) behind a `GET` only key.
+- `Device::trigger_features()` says which trigger extras the hardware
+  has (counts, consecutive counts, durations, value ranges, or and and
+  combines, a stage limit). The `-t` parser and `set_trigger` check a
+  trigger against it with `Trigger::check`, so the error names the
+  unsupported feature before anything is written to the device.
+
+When a register's behaviour is not pinned down by the protocol notes,
+let the bench decide: the LogicPort's duration counter turned out to be
+cumulative without the consecutive flag, its duration trigger lands one
+sample later than an edge trigger, and inverted inputs come back
+inverted from the sample memory. Each cost one bench run to find and
+would have cost a user a long afternoon.
+
 ## Order of work that paid off
 
 1. Transport first: enumerate, open, claim, run the pin-safe requests,

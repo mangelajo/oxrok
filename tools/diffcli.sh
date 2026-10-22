@@ -6,11 +6,15 @@
 #
 # SIGROK_CLI and OXROK name the binaries (defaults: sigrok-cli on PATH
 # and target/debug/oxrok). --hw adds the hardware cases, which need the
-# LogicPort and the fx2lafw device attached and idle inputs.
+# LogicPort and the fx2lafw device attached, and the ESP32 generator for
+# the LogicPort cases: HIL names the bench binary that drives it
+# (default target/debug/oxrok-hil), which sets idle inputs and a 1 MHz
+# clock on CLK1 for the trigger case.
 
 set -u
 SIGROK_CLI=${SIGROK_CLI:-sigrok-cli}
 OXROK=${OXROK:-$(dirname "$0")/../target/debug/oxrok}
+HIL=${HIL:-$(dirname "$0")/../target/debug/oxrok-hil}
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
 filter=""
@@ -172,9 +176,16 @@ fi
 
 if [ $hw = 1 ]; then
     LP="intronix-logicport"
-    case_ "logicport show" --keep-header -- -d $LP --show
+    gen() { [ -x "$HIL" ] && "$HIL" "$@" > /dev/null; }
+    gen --clk 0 --set 0
+    # The options beyond libsigrok's are filtered out, and the threshold
+    # list: the C driver accumulates the 0.05 V step, so its values round
+    # differently at one decimal and never equal the current value.
+    case_ "logicport show" --keep-header --filter '/^    clock_qualifier:/d; /^    sample_point:/d; /^    invert:/d; /^    frequency_channel:/d; /^    frequency:/d; /^    voltage_threshold:/d' -- -d $LP --show
     case_ "logicport bits 1M" -- -d $LP -c samplerate=1M:voltage_threshold=1.5-1.5 -C D0,D1,CLK1 --samples 64 -O bits
+    gen --clk 1000000
     case_ "logicport csv 10M trigger" -- -d $LP -c samplerate=10M:captureratio=25 -C D0,CLK1 --samples 200 -t CLK1=r -O csv:trigger=true:header=false
+    gen --clk 0
     case_ "logicport rle" -- -d $LP -c samplerate=1M:rle=on -C CLK1 --samples 500 -O bits
     case_ "logicport 500M" -- -d $LP -c samplerate=500M -C CLK1 --samples 100 -O hex
     case_ "fx2lafw show" --keep-header -- -d fx2lafw --show

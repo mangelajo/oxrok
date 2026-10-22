@@ -261,9 +261,12 @@ impl TriggerLevel {
             self.counter_source = COUNTER_SRC_EDGE;
         }
         if let Some(ticks) = duration {
+            // Without the consecutive flag the duration counter keeps
+            // counting across gaps in the condition (seen on the bench).
             self.counter_source = COUNTER_SRC_CLOCK;
             self.counter_mode = COUNTER_MODE_DURATION;
             self.count_low = ticks;
+            self.consecutive = true;
             return;
         }
         if let Some((n, consecutive)) = count {
@@ -323,7 +326,7 @@ pub struct Program {
     pub qualifier: Qualifier,
     /// The state mode sample point.
     pub sample_point: SamplePoint,
-    /// Inputs the trigger sees inverted; the readout inverts the data.
+    /// Inputs the device inverts, for the trigger and the stored data.
     pub invert_mask: u64,
     /// Run length compression.
     pub rle: bool,
@@ -364,9 +367,9 @@ impl Program {
 
     /// Extra samples between the trigger condition and the record the
     /// FPGA marks, beyond the usual pipeline delay. A duration trigger
-    /// lands two samples late.
+    /// lands one sample late (measured on the bench at 1 MHz).
     pub fn trigger_delay_extra(&self) -> u64 {
-        if self.trigger.iter().any(TriggerLevel::is_duration) { 2 } else { 0 }
+        u64::from(self.trigger.iter().any(TriggerLevel::is_duration))
     }
 
     /// True when DDR readout applies.
@@ -1193,9 +1196,10 @@ mod tests {
         let p = Program { trigger: [l, TriggerLevel::default()], ..program() };
         let regs = program_regs(&p, 0);
         assert_eq!(lookup(&regs, a + TRIG_COUNT_LOW), Some(100));
+        assert_eq!(lookup(&regs, a + TRIG_CONSECUTIVE), Some(1));
         assert_eq!(lookup(&regs, a + TRIG_COUNTER_SOURCE), Some(0));
         assert_eq!(lookup(&regs, a + TRIG_COUNTER_MODE), Some(2));
-        assert_eq!(p.trigger_delay_extra(), 2);
+        assert_eq!(p.trigger_delay_extra(), 1);
         // D0-D2 within 3..5, combined with level B by or.
         let mut l = TriggerLevel {
             value_mask: 7,

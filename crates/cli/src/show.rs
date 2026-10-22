@@ -346,10 +346,12 @@ fn print_option(device: &dyn Device, key: &Key, access: oxrok_core::Access, grou
                             let is_current = current.is_some_and(|(lo, hi)| {
                                 (lo - v).abs() < 1e-9 && (hi - v).abs() < 1e-9
                             });
+                            // sigrok-cli prints each tuple as lo-hi with
+                            // one decimal.
                             if is_current {
-                                format!("{} (current)", fmt_f64(*v))
+                                format!("{v:.1}-{v:.1} (current)")
                             } else {
-                                fmt_f64(*v)
+                                format!("{v:.1}-{v:.1}")
                             }
                         })
                         .collect();

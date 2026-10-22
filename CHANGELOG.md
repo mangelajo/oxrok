@@ -15,6 +15,16 @@ release may change the library API.
 
 ### Added
 
+- Trigger extras in the shared model and the `-t` grammar: occurrence
+  counts (`D0=r*5`, consecutive `D0=r*5c`), durations (`D0=1>100`,
+  `D0=1>50us`), value ranges on a channel group (`D0-D2=3..5`,
+  `D0-D2=!7`) and two stage or/and combines (`D0=r|D1=r`, `D0=r&D1=r`).
+  Devices advertise what they support with `trigger_features`; the
+  software trigger takes counts and durations.
+- LogicPort: all of the above in hardware, plus the options
+  `clock_qualifier`, `sample_point` (FPGA images 0 to 5), `invert`,
+  `frequency_channel` and the read only `frequency` counter. Bench
+  sections for each; 60 checks.
 - Workspace with `oxrok-core`, `oxrok-formats`, `oxrok-driver-demo` and
   the `oxrok` command line tool; CI for Linux, macOS and Windows.
 - Configuration model: the sigrok keys with their ids, names and value

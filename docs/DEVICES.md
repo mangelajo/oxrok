@@ -20,16 +20,39 @@ Permissions: on Linux the device is root only without a udev rule; until
 oxrok ships rules (phase 7), a rule with `MODE="0666"` for `0403:dc48`
 does. macOS and Windows need nothing beyond `docs/USB.md`.
 
-Bench: `oxrok-hil` runs the hardware checks (levels, threshold, timebase
-up to 500 MHz, triggers, compression, frames, all byte lanes) against a
-LogicPort wired to the ESP32 signal generator from the libsigrok driver
-repository. `oxrok-hil -k trigger` runs a subset, `LOGICPORT_CONN`
-picks a unit, `SIGGEN_PORT` the serial port. `oxrok-hil --clk HZ`,
-`--set MASK`, `--cmd LINE` and `--delay MS` only drive the generator,
-for captures by hand. Opening the serial port resets the ESP32, so the
-commands of one experiment go in one invocation.
+Options beyond libsigrok's, set with `-c`:
 
-Verified 2026-10-22 on two units: all 36 bench checks pass, the `bits`
+- `clock_qualifier=off|active-high|active-low`: in state mode, sample
+  only while the qualifier input is high or low.
+- `sample_point=on|before|after`: in state mode, sample on the clock
+  edge, 2.5 ns before it or 2.5 ns after it (the FPGA image changes).
+- `invert=D0,CLK1` or a hex mask, `none` to clear: inputs the device
+  reads inverted, for the trigger and the stored data.
+- `frequency_channel=CLK1`: the input of the frequency counter.
+- `frequency`: read only, `--get frequency` measures the frequency on
+  that input to 10 Hz, up to 300 MHz. A `--show` also measures it, which
+  configures the FPGA on a cold device.
+
+Triggers take the forms in `docs/CLI.md`: occurrence counts (plain or
+consecutive), durations, value ranges on a channel group, and two stages
+in sequence, or, or and.
+
+Bench: `oxrok-hil` runs the hardware checks (levels, threshold, timebase
+up to 500 MHz, triggers, counts, durations, value ranges, combine modes,
+sample points, inversion, the frequency counter, compression, frames,
+all byte lanes) against a LogicPort wired to the ESP32 signal generator
+from the libsigrok driver repository. `oxrok-hil -k trigger` runs a
+subset, `LOGICPORT_CONN` picks a unit, `SIGGEN_PORT` the serial port.
+`oxrok-hil --clk HZ`, `--set MASK`, `--cmd LINE` and `--delay MS` only
+drive the generator, for captures by hand. Opening the serial port
+resets the ESP32, so the commands of one experiment go in one
+invocation. Checks of features not yet seen working print UNVERIFIED
+rather than FAIL; `--strict` counts them as failures. The `qualifier`
+section needs a wire from GPIO15 to CLK2 and `--clk2`; it is the one
+section still unverified, and it also tells which input the qualifier
+is.
+
+Verified 2026-10-22 on two units: all 60 bench checks pass, the `bits`
 and `csv` outputs match the libsigrok driver through sigrok-cli byte for
 byte for the same captures, and a cold start (unconfigured FPGA after a
 power cycle) configures and captures in about 4 s: the open sees no

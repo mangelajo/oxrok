@@ -31,10 +31,33 @@ Deliberate, and kept small:
   warning into a failed run, at any `-l` level, which gives the
   sigrok-cli behaviour for scripts that want it.
 - Triggers: `-t` takes several stages separated by `;`, e.g.
-  `-t 'D0=r;D1=1'`. One stage is written as in sigrok-cli.
+  `-t 'D0=r;D1=1'`. One stage is written as in sigrok-cli. On top of
+  that, when the device supports it (the parser rejects what it does
+  not):
+  - `D0=r*5` fires on the fifth rising edge, `D0=r*5c` on the fifth in
+    a row: an edge while the stage's other conditions do not hold starts
+    the count over.
+  - `D0=1>100` fires once D0 has been high for more than 100 samples,
+    `D0=1>50us` with a time, converted with the sample rate set by `-c`
+    (in state mode, clock cycles).
+  - `D0-D2=3..5` fires while the value on D2 D1 D0 (D0 least
+    significant) is within 3..5, `D0-D2=!7` while it is not 7. Decimal
+    or `0x` hex.
+  - `D0=r|D1=r` fires on either stage, `D0=r&D1=r` once both have fired
+    in any order. Exactly two stages.
+
+  Counts, durations and ranges belong to the stage their token is in.
+  The demo and fx2lafw devices (software trigger) take counts and
+  durations; the LogicPort takes all of them with two stages, see
+  `docs/DEVICES.md`. sigrok-cli rejects these forms. `>`, `;`, `|` and
+  `&` need quoting in a shell.
 - The demo device honours triggers (sigrok's ignores them): samples
   before the trigger are dropped, except the capture ratio's share of
   the sample limit, and the trigger is marked in the output.
+- `--show` marks the current value in a float range list such as the
+  LogicPort's `voltage_threshold`. sigrok-cli computes that list by
+  accumulating the step, so its values never equal the current one and
+  it marks none.
 - `-I module --show` and `-O module --show` print the same option
   names with oxrok's own wording.
 - `fx2lafw` sends frame packets only when `limit_frames` is not 1.

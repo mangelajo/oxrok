@@ -708,9 +708,6 @@ struct Feed<'a> {
     sink: &'a PacketSink,
     buf: Vec<u8>,
     alive: bool,
-    /// The device stores the inputs as seen; inverted inputs are
-    /// inverted here, as the vendor software does.
-    invert: u64,
 }
 
 const FEED_CHUNK: usize = 4096 * UNIT_SIZE;
@@ -728,7 +725,7 @@ impl Feed<'_> {
 
 impl SampleOut for Feed<'_> {
     fn samples(&mut self, sample: u64, count: u64) {
-        let bytes = &(sample ^ self.invert).to_le_bytes()[..UNIT_SIZE];
+        let bytes = &sample.to_le_bytes()[..UNIT_SIZE];
         let mut left = count;
         while left > 0 && self.alive {
             let room = (FEED_CHUNK - self.buf.len()) / UNIT_SIZE;
@@ -809,12 +806,7 @@ impl Acquisition {
         if self.program.rle && limit == 0 {
             limit = RLE_DEFAULT_LIMIT;
         }
-        let mut feed = Feed {
-            sink,
-            buf: Vec::with_capacity(FEED_CHUNK),
-            alive: true,
-            invert: self.program.invert_mask,
-        };
+        let mut feed = Feed { sink, buf: Vec::with_capacity(FEED_CHUNK), alive: true };
         let sent;
         {
             let mut s = Sink::new(&mut feed, limit, self.program.capture_ratio);
