@@ -32,3 +32,5 @@ release may change the library API.
   `-i FILE [-I module:options]` with format detection, `-C` on files,
   and `-i FILE --show` for a file's properties. `-I module --show` and
   `-O module --show` describe a module.
+- `--strict`: warnings fail the run. File inputs stop at the first
+  chunk that warned.

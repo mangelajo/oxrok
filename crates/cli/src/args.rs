@@ -20,6 +20,10 @@ pub struct Args {
     #[arg(short = 'l', long, default_value_t = 2, value_name = "LEVEL")]
     pub loglevel: u8,
 
+    /// Treat warnings as errors: stop and exit with failure
+    #[arg(long)]
+    pub strict: bool,
+
     /// The driver to use, with scan options: driver[:key=value]...
     #[arg(short = 'd', long, value_name = "DRIVER")]
     pub driver: Option<String>,

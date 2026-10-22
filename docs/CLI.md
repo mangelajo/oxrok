@@ -21,7 +21,9 @@ Deliberate, and kept small:
 - The `binary` input parses `samplerate=200k` as 200 kHz. sigrok-cli
   reads it as 200 Hz, since it ignores the suffix for this option.
 - The VCD input reads undefined bits (`x`, `z`, `u`, `-`) as 0 with one
-  warning. sigrok-cli stops with an error.
+  warning. sigrok-cli stops with an error. `--strict` turns every
+  warning into a failed run, at any `-l` level, which gives the
+  sigrok-cli behaviour for scripts that want it.
 - Triggers: `-t` takes several stages separated by `;`, e.g.
   `-t 'D0=r;D1=1'`. One stage is written as in sigrok-cli.
 - The demo device's default logic pattern is `oxrok`, a bitmap of that

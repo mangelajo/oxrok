@@ -78,7 +78,7 @@ fn stream(args: &Args, handler: &mut dyn FnMut(Event) -> bool) -> Result<()> {
                     stop = true;
                 }
             })?;
-            Ok(())
+            crate::strict_check(args)
         }
         Source::Module { mut input, mut reader, title } => {
             let mut packets = Vec::new();
@@ -108,6 +108,9 @@ fn stream(args: &Args, handler: &mut dyn FnMut(Event) -> bool) -> Result<()> {
                         stop = true;
                     }
                 }
+                // Stop at the first chunk that warned instead of
+                // draining the file.
+                crate::strict_check(args)?;
                 if n == 0 {
                     break;
                 }

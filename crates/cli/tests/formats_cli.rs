@@ -251,3 +251,35 @@ fn list_shows_inputs_and_outputs() {
     assert!(out.starts_with("ID: vcd\nName: VCD\n"));
     assert!(out.contains("    downsample: "));
 }
+
+#[test]
+fn strict_turns_vcd_warnings_into_errors() {
+    let dir = tempdir("strict");
+    let file = dir.join("x.vcd");
+    std::fs::write(
+        &file,
+        "$timescale 1 us $end\n$scope module top $end\n$var wire 1 ! d0 $end\n\
+         $upscope $end\n$enddefinitions $end\n#0\n1!\n#1\nx!\n#2\n0!\n",
+    )
+    .unwrap();
+    let path = file.to_str().unwrap();
+
+    let (out, err, ok) = oxrok(&["-i", path, "-O", "bits"]);
+    assert!(ok, "{err}");
+    assert!(err.contains("Undefined bit values"), "{err}");
+    assert_eq!(body(&out), "Acquisition with 1/1 channels at 1 MHz\ntop.d0:100\n");
+
+    let (_, err, ok) = oxrok(&["-i", path, "-O", "bits", "--strict"]);
+    assert!(!ok);
+    assert!(err.contains("Undefined bit values"), "{err}");
+    assert!(err.contains("1 warning treated as error (--strict)."), "{err}");
+
+    // The count does not depend on the log level.
+    let (_, err, ok) = oxrok(&["-i", path, "-O", "bits", "--strict", "-l", "0"]);
+    assert!(!ok);
+    assert!(!err.contains("Undefined bit values"), "{err}");
+    assert!(err.contains("1 warning treated as error (--strict)."), "{err}");
+
+    let (_, err, ok) = oxrok(&["-d", DEMO4, "--samples", "4", "-O", "bits", "--strict"]);
+    assert!(ok, "{err}");
+}

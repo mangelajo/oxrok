@@ -26,6 +26,18 @@ fn registry() -> Registry {
     r
 }
 
+/// With `--strict`, a run that logged warnings fails.
+pub fn strict_check(args: &args::Args) -> oxrok_core::Result<()> {
+    let n = logger::warnings();
+    if args.strict && n > 0 {
+        let s = if n == 1 { "" } else { "s" };
+        return Err(oxrok_core::Error::Arg(format!(
+            "{n} warning{s} treated as error{s} (--strict)."
+        )));
+    }
+    Ok(())
+}
+
 fn main() -> ExitCode {
     let args = args::Args::parse();
     logger::init(args.loglevel);
@@ -62,6 +74,7 @@ fn main() -> ExitCode {
         show::help();
         Ok(())
     };
+    let result = result.and_then(|()| strict_check(&args));
     match result {
         Ok(()) => ExitCode::SUCCESS,
         Err(oxrok_core::Error::Arg(msg)) => {
