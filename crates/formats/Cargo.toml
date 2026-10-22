@@ -1,0 +1,18 @@
+[package]
+name = "oxrok-formats"
+description = "File formats and text outputs of oxrok: sigrok compatible bits, hex, ascii and analog outputs"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+keywords = ["logic-analyzer", "sigrok", "vcd"]
+categories = ["encoding", "hardware-support"]
+
+[lints]
+workspace = true
+
+[dependencies]
+oxrok-core.workspace = true
+log.workspace = true

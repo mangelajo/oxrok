@@ -1,0 +1,86 @@
+//! Command line flags, sigrok-cli compatible.
+
+use clap::Parser;
+use std::path::PathBuf;
+
+/// A sigrok compatible logic analyzer command line tool.
+#[derive(Parser, Debug)]
+#[allow(clippy::struct_excessive_bools, clippy::doc_markdown)]
+#[command(name = "oxrok", disable_version_flag = true, about, long_about = None)]
+pub struct Args {
+    /// Show version and support list
+    #[arg(short = 'V', long)]
+    pub version: bool,
+
+    /// List supported devices/modules/decoders
+    #[arg(short = 'L', long = "list-supported")]
+    pub list_supported: bool,
+
+    /// Set loglevel (0-5, default 2)
+    #[arg(short = 'l', long, default_value_t = 2, value_name = "LEVEL")]
+    pub loglevel: u8,
+
+    /// The driver to use, with scan options: driver[:key=value]...
+    #[arg(short = 'd', long, value_name = "DRIVER")]
+    pub driver: Option<String>,
+
+    /// Device option: [channel_group=GROUP:]key=value[:key=value]...
+    #[arg(short = 'c', long = "config", value_name = "CONFIG")]
+    pub configs: Vec<String>,
+
+    /// Save output to file
+    #[arg(short = 'o', long = "output-file", value_name = "FILE")]
+    pub output_file: Option<PathBuf>,
+
+    /// Output format: module[:option=value]...
+    #[arg(short = 'O', long = "output-format", value_name = "FORMAT")]
+    pub output_format: Option<String>,
+
+    /// Channels to use: names or ranges, comma separated, name=newname to rename
+    #[arg(short = 'C', long, value_name = "CHANNELS")]
+    pub channels: Option<String>,
+
+    /// Channel group to show or configure
+    #[arg(short = 'g', long = "channel-group", value_name = "GROUP")]
+    pub channel_group: Option<String>,
+
+    /// Trigger: channel=matches[,channel=matches]... with ; between stages
+    #[arg(short = 't', long, value_name = "TRIGGERS")]
+    pub triggers: Option<String>,
+
+    /// Wait for trigger before saving data
+    #[arg(short = 'w', long = "wait-trigger")]
+    pub wait_trigger: bool,
+
+    /// Scan for devices
+    #[arg(long)]
+    pub scan: bool,
+
+    /// Show device details
+    #[arg(long)]
+    pub show: bool,
+
+    /// How long to sample (ms, or with a unit: 2s, 500ms)
+    #[arg(long, value_name = "TIME")]
+    pub time: Option<String>,
+
+    /// Number of samples to acquire (with size suffix: 1k, 2m)
+    #[arg(long, value_name = "SAMPLES")]
+    pub samples: Option<String>,
+
+    /// Number of frames to acquire
+    #[arg(long, value_name = "FRAMES")]
+    pub frames: Option<String>,
+
+    /// Sample continuously until stopped
+    #[arg(long)]
+    pub continuous: bool,
+
+    /// Get device option only: [channel_group=GROUP:]key
+    #[arg(long = "get", value_name = "KEY")]
+    pub gets: Vec<String>,
+
+    /// Set device options only
+    #[arg(long)]
+    pub set: bool,
+}

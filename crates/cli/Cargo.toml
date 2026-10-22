@@ -1,0 +1,26 @@
+[package]
+name = "oxrok"
+description = "A sigrok compatible logic analyzer command line tool, in Rust"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+keywords = ["logic-analyzer", "sigrok", "cli", "oscilloscope"]
+categories = ["command-line-utilities", "hardware-support"]
+
+[lints]
+workspace = true
+
+[[bin]]
+name = "oxrok"
+path = "src/main.rs"
+
+[dependencies]
+oxrok-core.workspace = true
+oxrok-formats.workspace = true
+oxrok-driver-demo.workspace = true
+clap.workspace = true
+log.workspace = true
+ctrlc = "3"

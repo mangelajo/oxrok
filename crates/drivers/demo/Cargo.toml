@@ -1,0 +1,18 @@
+[package]
+name = "oxrok-driver-demo"
+description = "The oxrok demo driver: a logic and analog pattern generator with no hardware"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+keywords = ["logic-analyzer", "sigrok", "demo"]
+categories = ["hardware-support", "simulation"]
+
+[lints]
+workspace = true
+
+[dependencies]
+oxrok-core.workspace = true
+log.workspace = true

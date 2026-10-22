@@ -1,0 +1,18 @@
+[package]
+name = "oxrok-core"
+description = "Core types of oxrok, a sigrok compatible logic analyzer stack: devices, config keys, packets, sessions"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+keywords = ["logic-analyzer", "sigrok", "oscilloscope", "acquisition"]
+categories = ["hardware-support", "science"]
+
+[lints]
+workspace = true
+
+[dependencies]
+log.workspace = true
+thiserror.workspace = true
