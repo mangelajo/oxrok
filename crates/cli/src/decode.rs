@@ -286,13 +286,13 @@ impl Decoding {
                     out.flush()?;
                 }
             }
-            Output::Meta { instance, ss, es, item } => {
+            Output::Meta { instance, ss, es, name, item } => {
                 if self.info_of(instance).is_some_and(|i| self.meta_visible.contains(&i.id)) {
                     let mut line = String::new();
                     if self.show_snum {
                         let _ = write!(line, "{ss}-{es} ");
                     }
-                    let _ = writeln!(line, "{instance}: {item:?}");
+                    let _ = writeln!(line, "{instance}: {name}: {item}");
                     out.write_all(line.as_bytes())?;
                 }
             }

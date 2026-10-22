@@ -40,10 +40,14 @@ checked against the allowed values.
 
 ## Native decoders
 
-`uart` reproduces libsigrokdecode's annotation classes, rows, texts and
-sample ranges; `crates/cli/tests/decode_cli.rs` compares its output
-with sigrok-cli's byte for byte. It also keeps one upstream quirk that
-selections depend on: stop bits are tagged with the parity-ok class.
+`uart`, `i2c` and `spi` reproduce libsigrokdecode's annotation classes,
+rows, texts, sample ranges, binary output and metadata;
+`crates/cli/tests/decode_cli.rs` compares their output with sigrok-cli's
+byte for byte on synthetic captures, and `tools/diffcli.sh` repeats the
+comparison in every output mode. Two details to know: `uart` keeps an
+upstream quirk that selections depend on (stop bits are tagged with the
+parity-ok class), and the i2c decoder's short name is `I2C`, not the
+upstream `I2C` with a superscript two, so the sources stay ASCII.
 
 Each native decoder's source names the `pd.py` it corresponds to and
 that file's authors, like the rest of the code (`docs/LICENSING.md`),
@@ -71,5 +75,6 @@ build has no Python dependency.
 
 ## Not yet
 
-Stacked decoders (`-P uart,midi`), the Python host, `i2c` and `spi`,
-and the conformance fixtures from real captures.
+Stacked decoders (`-P uart,midi`), the Python host, and conformance
+fixtures from real captures (the bench's signal generator has UART,
+I2C and SPI commands for that).

@@ -109,6 +109,8 @@ pub enum Output {
         ss: u64,
         /// End sample.
         es: u64,
+        /// The registered name, e.g. `Bitrate`.
+        name: String,
         /// The value.
         item: Item,
     },
@@ -148,8 +150,33 @@ pub trait Context {
     /// Emits an item for stacked decoders.
     fn put_python(&mut self, ss: u64, es: u64, item: Item);
 
-    /// Emits metadata.
-    fn put_meta(&mut self, ss: u64, es: u64, item: Item);
+    /// Emits metadata under its registered `name`.
+    fn put_meta(&mut self, ss: u64, es: u64, name: &str, item: Item);
+}
+
+impl std::fmt::Display for Item {
+    /// As sigrok-cli prints metadata values: numbers bare, strings in
+    /// single quotes, lists in brackets.
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Item::Str(s) => write!(f, "'{s}'"),
+            Item::Int(v) => write!(f, "{v}"),
+            Item::Float(v) => write!(f, "{v}"),
+            Item::Bool(b) => write!(f, "{b}"),
+            Item::None => write!(f, "None"),
+            Item::Bytes(b) => write!(f, "{b:?}"),
+            Item::List(items) => {
+                write!(f, "[")?;
+                for (i, it) in items.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{it}")?;
+                }
+                write!(f, "]")
+            }
+        }
+    }
 }
 
 /// The configuration of one instance.
@@ -472,7 +499,13 @@ impl Context for ThreadContext {
         let _ = self.tx.send(Output::Python { instance: self.instance.clone(), ss, es, item });
     }
 
-    fn put_meta(&mut self, ss: u64, es: u64, item: Item) {
-        let _ = self.tx.send(Output::Meta { instance: self.instance.clone(), ss, es, item });
+    fn put_meta(&mut self, ss: u64, es: u64, name: &str, item: Item) {
+        let _ = self.tx.send(Output::Meta {
+            instance: self.instance.clone(),
+            ss,
+            es,
+            name: name.to_owned(),
+            item,
+        });
     }
 }

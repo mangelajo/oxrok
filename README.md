@@ -16,8 +16,8 @@ binary inputs, a USB transport (nusb or libusb) with record and replay,
 and two hardware drivers: the Intronix LogicPort LA1034, checked against
 the libsigrok driver byte for byte and against a signal generator on the
 bench, and fx2lafw for Saleae Logic clones and other FX2 boards, with
-the firmware upload. Protocol decoding has started with a native `uart`
-decoder whose output matches libsigrokdecode. See `docs/ROADMAP.md`.
+the firmware upload. Native `uart`, `i2c` and `spi` decoders print what
+libsigrokdecode prints. See `docs/ROADMAP.md`.
 
 ```sh
 cargo install --path crates/cli
@@ -46,7 +46,7 @@ for the same command, which is how the test suite checks it.
 | `oxrok-driver-logicport` | Intronix LogicPort LA1034, see `docs/LOGICPORT.md` and `docs/DEVICES.md` |
 | `oxrok-driver-fx2lafw` | FX2 based analyzers running the sigrok fx2lafw firmware |
 | `oxrok-decode` | the decoder API, the sample scanner behind `wait`, instance threads |
-| `oxrok-decoders` | native decoders: `uart` so far |
+| `oxrok-decoders` | native decoders: `uart`, `i2c`, `spi` |
 | `oxrok-hil` | hardware in the loop checks, not published |
 | `oxrok` | the command line tool |
 

@@ -137,6 +137,16 @@ case_ "uart rx-data" --keep-header -- -i "$UART" -P uart -A uart=rx-data
 case_ "uart ascii start and data" --keep-header -- -i "$UART" -P uart:format=ascii -A uart=rx-data:rx-start
 case_ "uart samplenum" --keep-header -- -i "$UART" -P uart -A uart=rx-data --protocol-decoder-samplenum
 case_ "uart binary" --keep-header -- -i "$UART" -P uart -B uart=rx
+I2C="$(dirname "$0")/../crates/cli/tests/fixtures/i2c-write-read.vcd"
+SPI="$(dirname "$0")/../crates/cli/tests/fixtures/spi-mode0.vcd"
+case_ "i2c all annotations verbose" --keep-header -- -l 4 -i "$I2C" -P i2c
+case_ "i2c unshifted addresses" --keep-header -- -i "$I2C" -P i2c:address_format=unshifted -A i2c=address-write:address-read
+case_ "i2c meta" --keep-header -- -i "$I2C" -P i2c -M i2c
+case_ "i2c binary" --keep-header -- -i "$I2C" -P i2c -B i2c=data-write
+case_ "spi all annotations verbose" --keep-header -- -l 4 -i "$SPI" -P spi
+case_ "spi lsb first nibbles" --keep-header -- -i "$SPI" -P spi:bitorder=lsb-first:wordsize=4 -A spi=mosi-data
+case_ "spi transfers" --keep-header -- -i "$SPI" -P spi -A spi=mosi-transfer:miso-transfer
+case_ "spi binary" --keep-header -- -i "$SPI" -P spi -B spi=miso
 # The documentation text is oxrok's own, and this libsigrokdecode build
 # predates decoder tags.
 case_ "decoder show uart" --keep-header --names --filter '/^Documentation:/,$d; /^Decoder tags:/,/^Annotation classes:/{/^- /d;}' -- -P uart --show

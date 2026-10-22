@@ -5,9 +5,11 @@
 
 #![forbid(unsafe_code)]
 
+pub mod i2c;
+pub mod spi;
 pub mod uart;
 
 use oxrok_decode::DecoderDef;
 
 /// Every decoder in this crate.
-pub static ALL: [&DecoderDef; 1] = [&uart::DEF];
+pub static ALL: [&DecoderDef; 3] = [&i2c::DEF, &spi::DEF, &uart::DEF];
