@@ -52,3 +52,14 @@ release may change the library API.
   large payloads as digests and tolerate repeated polls.
 - `oxrok-hil`: the hardware bench, driven by the ESP32 signal generator.
 - `docs/DRIVER_PORTING.md`, `docs/LOGICPORT.md`, `docs/DEVICES.md`.
+- `Transport::bulk_in_stream`: queued bulk reads on both backends,
+  recorded and replayed like single reads.
+- `oxrok-ezusb`: FX2 firmware upload (raw or Intel HEX) and the wait
+  for renumeration. `oxrok_core::firmware` holds the shared lookup of
+  firmware files.
+- `oxrok_core::SoftTrigger` and `PreTriggerBuffer`: host side triggers
+  for streaming devices.
+- `oxrok-driver-fx2lafw`: Saleae Logic clones, USBee, Cypress FX2 and
+  sigrok FX2 LA boards, 8 or 16 channels, with the firmware upload and
+  the software trigger. Replay tests over a written session; hardware
+  checks pending.

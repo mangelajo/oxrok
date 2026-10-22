@@ -62,6 +62,15 @@ sources into MIT crates.
   available. They should run through the library, not by parsing CLI
   output, and print one PASS/FAIL line per check.
 
+## Streaming devices
+
+The fx2lafw driver is the model: open a `bulk_in_stream` sized for
+10 ms of data per transfer and about 500 ms in flight, send the start
+command, then loop on `next` until the sample limit or the stop flag.
+`oxrok_core::SoftTrigger` matches a `Trigger` on the host, and
+`PreTriggerBuffer` keeps the capture ratio's worth of samples before
+it. Firmware uploads use `oxrok-ezusb` and `wait_for_renumeration`.
+
 ## Pitfalls met so far
 
 - Protocols with sequence numbers in their replies cannot have polls

@@ -29,3 +29,18 @@ picks a unit, `SIGGEN_PORT` the serial port.
 Verified 2026-10-22 on two units: all 35 bench checks pass, and the
 `bits` and `csv` outputs match the libsigrok driver through sigrok-cli
 byte for byte for the same captures.
+
+## fx2lafw devices
+
+Saleae Logic and its clones, the CWAV USBee models, the bare Cypress FX2
+board, Braintechnology USB-LPS and the sigrok FX2 LA boards. The driver
+is `fx2lafw`; 8 channels at up to 24 MS/s, 16 channels at up to
+12 MS/s on the models that have them, triggers on the host.
+
+Firmware: the sigrok `fx2lafw-*.fw` files (the `sigrok-firmware-fx2lafw`
+package, or `/opt/homebrew/share/sigrok-firmware` from Homebrew's
+sigrok). The driver uploads the file for the device's USB id when the
+device does not report the firmware in its strings, then waits up to
+3 s for it to renumerate.
+
+Analog channels (USBee AX) are not supported.

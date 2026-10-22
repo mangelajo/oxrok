@@ -21,7 +21,7 @@
 //! number, hex data, or `err <kind> ["message"]` with kind `timeout`,
 //! `busy`, `device`, `io` or `unsupported`.
 
-use crate::{ControlRequest, Result, Transport, UsbDeviceInfo};
+use crate::{BulkStream, ControlRequest, Result, Transport, UsbDeviceInfo};
 use oxrok_core::Error;
 use sha2::{Digest as _, Sha256};
 use std::fmt::Write as _;
@@ -578,6 +578,23 @@ impl Transport for Recorder {
         let r = self.inner.bulk_in(endpoint, len, timeout);
         self.log(Call::BulkIn(endpoint, len), r, |d| Outcome::Data(d.clone()))
     }
+
+    /// Each completed transfer is recorded as a `bulk_in` of the
+    /// transfer size, so a stream replays through the same steps.
+    fn bulk_in_stream(
+        &mut self,
+        endpoint: u8,
+        transfer_size: usize,
+        depth: usize,
+    ) -> Result<Box<dyn BulkStream>> {
+        let inner = self.inner.bulk_in_stream(endpoint, transfer_size, depth)?;
+        Ok(Box::new(RecordedStream {
+            inner,
+            fixture: Arc::clone(&self.fixture),
+            endpoint,
+            transfer_size,
+        }))
+    }
 }
 
 fn is_read(call: &Call) -> bool {
@@ -589,10 +606,76 @@ fn is_command(call: &Call) -> bool {
     matches!(call, Call::ControlOut(..) | Call::BulkOut(..))
 }
 
+struct RecordedStream {
+    inner: Box<dyn BulkStream>,
+    fixture: Arc<Mutex<Fixture>>,
+    endpoint: u8,
+    transfer_size: usize,
+}
+
+impl BulkStream for RecordedStream {
+    fn next(&mut self, timeout: Duration) -> Result<Vec<u8>> {
+        let r = self.inner.next(timeout);
+        let outcome = match &r {
+            Ok(d) => Outcome::Data(d.clone()),
+            Err(e) => Outcome::from_error(e),
+        };
+        self.fixture
+            .lock()
+            .expect("recording lock")
+            .steps
+            .push(Step { call: Call::BulkIn(self.endpoint, self.transfer_size), outcome });
+        r
+    }
+}
+
 /// A transport that answers from a [`Fixture`] and fails on any call
 /// that differs from the recording, except for repeated polls (see
 /// [`Replay::finish`] and the rules in the source).
 pub struct Replay {
+    shared: Arc<Mutex<ReplayState>>,
+    device: UsbDeviceInfo,
+}
+
+impl Replay {
+    /// Replays `fixture` from the start.
+    pub fn new(fixture: Fixture) -> Self {
+        let device = fixture.device.clone();
+        Replay {
+            shared: Arc::new(Mutex::new(ReplayState {
+                fixture,
+                pos: 0,
+                last_cmd: None,
+                repeat: None,
+            })),
+            device,
+        }
+    }
+
+    /// Replays fixture text.
+    pub fn from_text(text: &str) -> Result<Self> {
+        Ok(Self::new(Fixture::parse(text)?))
+    }
+
+    fn state(&self) -> std::sync::MutexGuard<'_, ReplayState> {
+        self.shared.lock().expect("replay lock")
+    }
+
+    /// The number of recorded steps not yet replayed.
+    pub fn remaining(&self) -> usize {
+        self.state().remaining()
+    }
+
+    /// Fails when steps remain, for the end of a test. Leftover
+    /// repeats of the last read or of the last command group do not
+    /// count.
+    pub fn finish(&self) -> Result<()> {
+        self.state().finish()
+    }
+}
+
+/// The cursor over the recording, shared with streams.
+struct ReplayState {
     fixture: Fixture,
     pos: usize,
     /// The last answered command (a non-read step).
@@ -601,17 +684,7 @@ pub struct Replay {
     repeat: Option<usize>,
 }
 
-impl Replay {
-    /// Replays `fixture` from the start.
-    pub fn new(fixture: Fixture) -> Self {
-        Replay { fixture, pos: 0, last_cmd: None, repeat: None }
-    }
-
-    /// Replays fixture text.
-    pub fn from_text(text: &str) -> Result<Self> {
-        Ok(Self::new(Fixture::parse(text)?))
-    }
-
+impl ReplayState {
     /// The number of recorded steps not yet replayed.
     pub fn remaining(&self) -> usize {
         self.fixture.steps.len() - self.pos
@@ -743,27 +816,27 @@ impl Replay {
 
 impl Transport for Replay {
     fn info(&self) -> &UsbDeviceInfo {
-        &self.fixture.device
+        &self.device
     }
 
     fn claim_interface(&mut self, interface: u8) -> Result<()> {
-        self.unit(&Call::Claim(interface))
+        self.state().unit(&Call::Claim(interface))
     }
 
     fn release_interface(&mut self, interface: u8) -> Result<()> {
-        self.unit(&Call::Release(interface))
+        self.state().unit(&Call::Release(interface))
     }
 
     fn reset(&mut self) -> Result<()> {
-        self.unit(&Call::Reset)
+        self.state().unit(&Call::Reset)
     }
 
     fn max_packet_size(&mut self, endpoint: u8) -> Result<usize> {
-        self.count(&Call::MaxPacketSize(endpoint))
+        self.state().count(&Call::MaxPacketSize(endpoint))
     }
 
     fn control_out(&mut self, req: ControlRequest, data: &[u8], _timeout: Duration) -> Result<()> {
-        self.unit(&Call::ControlOut(req, data.to_vec().into()))
+        self.state().unit(&Call::ControlOut(req, data.to_vec().into()))
     }
 
     fn control_in(
@@ -772,15 +845,41 @@ impl Transport for Replay {
         len: usize,
         _timeout: Duration,
     ) -> Result<Vec<u8>> {
-        self.data(&Call::ControlIn(req, len))
+        self.state().data(&Call::ControlIn(req, len))
     }
 
     fn bulk_out(&mut self, endpoint: u8, data: &[u8], _timeout: Duration) -> Result<usize> {
-        self.count(&Call::BulkOut(endpoint, data.to_vec().into()))
+        self.state().count(&Call::BulkOut(endpoint, data.to_vec().into()))
     }
 
     fn bulk_in(&mut self, endpoint: u8, len: usize, _timeout: Duration) -> Result<Vec<u8>> {
-        self.data(&Call::BulkIn(endpoint, len))
+        self.state().data(&Call::BulkIn(endpoint, len))
+    }
+
+    /// The stream shares the recording cursor: its reads are the
+    /// `bulk_in` steps of the transfer size that follow.
+    fn bulk_in_stream(
+        &mut self,
+        endpoint: u8,
+        transfer_size: usize,
+        _depth: usize,
+    ) -> Result<Box<dyn BulkStream>> {
+        Ok(Box::new(ReplayStream { replay: Arc::clone(&self.shared), endpoint, transfer_size }))
+    }
+}
+
+struct ReplayStream {
+    replay: Arc<Mutex<ReplayState>>,
+    endpoint: u8,
+    transfer_size: usize,
+}
+
+impl BulkStream for ReplayStream {
+    fn next(&mut self, _timeout: Duration) -> Result<Vec<u8>> {
+        self.replay
+            .lock()
+            .expect("replay lock")
+            .data(&Call::BulkIn(self.endpoint, self.transfer_size))
     }
 }
 

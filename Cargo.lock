@@ -568,6 +568,7 @@ dependencies = [
  "log",
  "oxrok-core",
  "oxrok-driver-demo",
+ "oxrok-driver-fx2lafw",
  "oxrok-driver-logicport",
  "oxrok-formats",
  "oxrok-usb",
@@ -590,12 +591,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "oxrok-driver-fx2lafw"
+version = "0.1.0"
+dependencies = [
+ "log",
+ "oxrok-core",
+ "oxrok-ezusb",
+ "oxrok-usb",
+]
+
+[[package]]
 name = "oxrok-driver-logicport"
 version = "0.1.0"
 dependencies = [
  "log",
  "oxrok-core",
  "oxrok-ftdi",
+ "oxrok-usb",
+]
+
+[[package]]
+name = "oxrok-ezusb"
+version = "0.1.0"
+dependencies = [
+ "log",
+ "oxrok-core",
  "oxrok-usb",
 ]
 

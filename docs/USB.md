@@ -25,6 +25,15 @@ driver claimed the device; Apple ships no FTDI driver since Monterey
 and the LogicPort's product id is not one a third party FTDI driver
 matches by default.
 
+## Streams
+
+`Transport::bulk_in_stream` opens a queue of IN transfers for devices
+that stream faster than one blocking read after another can drain
+them: the nusb backend keeps `depth` transfers submitted in the kernel,
+the libusb backend runs a thread reading back to back. A recording
+logs every completed transfer as a `bulk_in` of the transfer size, and
+a replay answers a stream from those steps.
+
 ## Record and replay
 
 `record::Recorder` wraps a transport and logs every call with its

@@ -24,6 +24,7 @@ fn registry() -> Registry {
     let mut r = Registry::new();
     r.register(Box::new(oxrok_driver_demo::DemoDriver));
     r.register(Box::new(oxrok_driver_logicport::LogicPortDriver));
+    r.register(Box::new(oxrok_driver_fx2lafw::Fx2lafwDriver));
     r
 }
 

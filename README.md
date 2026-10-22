@@ -13,9 +13,10 @@ Early. The workspace builds on Linux, macOS and Windows with a demo
 device, a sigrok-cli style command line, the `bits`, `hex`, `ascii`,
 `analog`, `csv`, `vcd`, `binary` and `srzip` outputs, and `.sr`, VCD and
 binary inputs, a USB transport (nusb or libusb) with record and replay,
-and the first hardware driver: the Intronix LogicPort LA1034, checked
-against the libsigrok driver byte for byte and against a signal generator
-on the bench. fx2lafw comes next; see `docs/ROADMAP.md`.
+and two hardware drivers: the Intronix LogicPort LA1034, checked against
+the libsigrok driver byte for byte and against a signal generator on the
+bench, and fx2lafw for Saleae Logic clones and other FX2 boards, with
+the firmware upload. See `docs/ROADMAP.md`.
 
 ```sh
 cargo install --path crates/cli
@@ -39,7 +40,9 @@ for the same command, which is how the test suite checks it.
 | `oxrok-usb` | the `Transport` trait, nusb and libusb backends, record and replay fixtures |
 | `oxrok-ftdi` | FT232/FT245 vendor requests and FIFO reads over a transport |
 | `oxrok-driver-demo` | a logic and analog pattern generator with no hardware |
+| `oxrok-ezusb` | Cypress FX2 firmware upload and renumeration |
 | `oxrok-driver-logicport` | Intronix LogicPort LA1034, see `docs/LOGICPORT.md` and `docs/DEVICES.md` |
+| `oxrok-driver-fx2lafw` | FX2 based analyzers running the sigrok fx2lafw firmware |
 | `oxrok-hil` | hardware in the loop checks, not published |
 | `oxrok` | the command line tool |
 

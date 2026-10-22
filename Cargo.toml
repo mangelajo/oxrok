@@ -5,8 +5,10 @@ members = [
     "crates/formats",
     "crates/usb",
     "crates/ftdi",
+    "crates/ezusb",
     "crates/drivers/demo",
     "crates/drivers/logicport",
+    "crates/drivers/fx2lafw",
     "crates/cli",
     "crates/hil",
 ]
@@ -24,8 +26,10 @@ oxrok-core = { path = "crates/core", version = "0.1.0" }
 oxrok-formats = { path = "crates/formats", version = "0.1.0" }
 oxrok-usb = { path = "crates/usb", version = "0.1.0", default-features = false }
 oxrok-ftdi = { path = "crates/ftdi", version = "0.1.0" }
+oxrok-ezusb = { path = "crates/ezusb", version = "0.1.0" }
 oxrok-driver-demo = { path = "crates/drivers/demo", version = "0.1.0" }
 oxrok-driver-logicport = { path = "crates/drivers/logicport", version = "0.1.0" }
+oxrok-driver-fx2lafw = { path = "crates/drivers/fx2lafw", version = "0.1.0" }
 log = "0.4"
 thiserror = "2"
 clap = { version = "4", features = ["derive"] }

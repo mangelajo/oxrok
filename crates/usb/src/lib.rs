@@ -172,6 +172,25 @@ pub trait Transport: Send {
     /// Reads up to `len` bytes from a bulk IN endpoint. `len` is rounded
     /// up to a multiple of the packet size by the backend.
     fn bulk_in(&mut self, endpoint: u8, len: usize, timeout: Duration) -> Result<Vec<u8>>;
+
+    /// Opens a stream of bulk IN transfers that keeps `depth` transfers
+    /// of `transfer_size` bytes in flight, for devices that stream
+    /// faster than one blocking read after another can drain them. The
+    /// endpoint is exclusive to the stream until it is dropped.
+    fn bulk_in_stream(
+        &mut self,
+        endpoint: u8,
+        transfer_size: usize,
+        depth: usize,
+    ) -> Result<Box<dyn BulkStream>>;
+}
+
+/// A queue of bulk IN transfers, see [`Transport::bulk_in_stream`].
+pub trait BulkStream: Send {
+    /// The next completed transfer, in order. A short transfer is not
+    /// an error; nothing completing within `timeout` is
+    /// [`Error::Timeout`].
+    fn next(&mut self, timeout: Duration) -> Result<Vec<u8>>;
 }
 
 /// Which backend `list_devices` and `open` use.

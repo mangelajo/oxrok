@@ -1,0 +1,21 @@
+[package]
+name = "oxrok-driver-fx2lafw"
+description = "fx2lafw: Cypress FX2 based logic analyzers (Saleae Logic clones, USBee, sigrok FX2 LA) for oxrok"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+oxrok-core.workspace = true
+oxrok-usb.workspace = true
+oxrok-ezusb.workspace = true
+log.workspace = true
+
+[dev-dependencies]
+oxrok-usb = { workspace = true, features = ["nusb"] }
+
+[lints]
+workspace = true

@@ -1,6 +1,6 @@
 //! The `nusb` backend.
 
-use crate::{ControlRequest, Handle, Result, Transport, UsbDeviceInfo};
+use crate::{BulkStream, ControlRequest, Handle, Result, Transport, UsbDeviceInfo};
 use nusb::MaybeFuture;
 use nusb::transfer::{Buffer, Bulk, ControlIn, ControlOut, ControlType, In, Out, Recipient};
 use oxrok_core::Error;
@@ -253,6 +253,22 @@ impl Transport for Nusb {
         }
     }
 
+    fn bulk_in_stream(
+        &mut self,
+        endpoint: u8,
+        transfer_size: usize,
+        depth: usize,
+    ) -> Result<Box<dyn BulkStream>> {
+        self.in_endpoint(endpoint)?;
+        let mut ep = self.in_endpoints.remove(&endpoint).expect("inserted");
+        let mps = ep.max_packet_size().max(1);
+        let size = transfer_size.div_ceil(mps).max(1) * mps;
+        for _ in 0..depth.max(1) {
+            ep.submit(ep.allocate(size));
+        }
+        Ok(Box::new(NusbStream { ep, size }))
+    }
+
     fn bulk_in(&mut self, endpoint: u8, len: usize, timeout: Duration) -> Result<Vec<u8>> {
         let ep = self.in_endpoint(endpoint)?;
         let mps = ep.max_packet_size().max(1);
@@ -266,6 +282,42 @@ impl Transport for Nusb {
                 Ok(v)
             }
             Err(e) => Err(transfer_error(e)),
+        }
+    }
+}
+
+struct NusbStream {
+    ep: nusb::Endpoint<Bulk, In>,
+    size: usize,
+}
+
+impl BulkStream for NusbStream {
+    fn next(&mut self, timeout: Duration) -> Result<Vec<u8>> {
+        let Some(c) = self.ep.wait_next_complete(timeout) else {
+            return Err(Error::Timeout);
+        };
+        // Keep the queue full before looking at the result.
+        self.ep.submit(self.ep.allocate(self.size));
+        match c.status {
+            Ok(()) => Ok(c.buffer.into_vec()),
+            Err(e) if c.actual_len > 0 => {
+                log::debug!("transfer ended with {e} after {} bytes", c.actual_len);
+                let mut v = c.buffer.into_vec();
+                v.truncate(c.actual_len);
+                Ok(v)
+            }
+            Err(e) => Err(transfer_error(e)),
+        }
+    }
+}
+
+impl Drop for NusbStream {
+    fn drop(&mut self) {
+        self.ep.cancel_all();
+        while self.ep.pending() > 0 {
+            if self.ep.wait_next_complete(Duration::from_secs(1)).is_none() {
+                break;
+            }
         }
     }
 }

@@ -9,7 +9,6 @@
 //! `sigrok-fwextract-intronix-logicport` writes them, are accepted too.
 
 use oxrok_core::{Error, Result};
-use std::path::PathBuf;
 
 /// The file name looked up in the firmware directories.
 pub const FILE: &str = "intronix-logicport.ccf";
@@ -80,37 +79,7 @@ impl Image {
     }
 }
 
-/// Where firmware files are looked for, in order: `OXROK_FIRMWARE_DIR`,
-/// `SIGROK_FIRMWARE_DIR`, the user's data directories and the system
-/// ones, so an existing sigrok installation keeps working.
-pub fn search_dirs() -> Vec<PathBuf> {
-    let mut dirs = Vec::new();
-    for var in ["OXROK_FIRMWARE_DIR", "SIGROK_FIRMWARE_DIR"] {
-        if let Ok(v) = std::env::var(var) {
-            dirs.extend(std::env::split_paths(&v));
-        }
-    }
-    if let Some(home) = std::env::var_os("HOME").or_else(|| std::env::var_os("USERPROFILE")) {
-        let home = PathBuf::from(home);
-        dirs.push(home.join(".local/share/oxrok-firmware"));
-        dirs.push(home.join(".local/share/sigrok-firmware"));
-    }
-    for d in [
-        "/usr/local/share/oxrok-firmware",
-        "/usr/local/share/sigrok-firmware",
-        "/opt/homebrew/share/sigrok-firmware",
-        "/usr/share/oxrok-firmware",
-        "/usr/share/sigrok-firmware",
-    ] {
-        dirs.push(PathBuf::from(d));
-    }
-    dirs
-}
-
-/// The first directory holding `name`.
-pub fn find_file(name: &str) -> Option<PathBuf> {
-    search_dirs().into_iter().map(|d| d.join(name)).find(|p| p.is_file())
-}
+pub use oxrok_core::firmware::{find_file, search_dirs};
 
 /// Parses the header line: nine comma separated numbers, XOR obfuscated.
 /// Returns the eight image sizes in 16 byte units.
@@ -196,23 +165,21 @@ pub fn stream_from_rbf(rbf: &[u8]) -> Vec<u8> {
 /// Loads `image` from the firmware directories: the `.ccf` file, or
 /// `intronix-logicport-<name>.rbf` when that is what is installed.
 pub fn load_image(image: Image) -> Result<Vec<u8>> {
-    if let Some(path) = find_file(FILE) {
-        log::debug!("Loading image {} from {}.", image.name(), path.display());
-        let data = std::fs::read(&path)?;
-        return image_from_ccf(&data, image);
-    }
     let rbf_name = format!("intronix-logicport-{}.rbf", image.name());
-    if let Some(path) = find_file(&rbf_name) {
-        log::debug!("Loading image {} from {}.", image.name(), path.display());
-        let stream = stream_from_rbf(&std::fs::read(&path)?);
+    if find_file(FILE).is_none() && find_file(&rbf_name).is_some() {
+        let stream = stream_from_rbf(&oxrok_core::firmware::read(&rbf_name, "")?);
         if !stream_is_rbf(&stream) {
             return Err(Error::device(format!("'{rbf_name}' is not a valid bitstream")));
         }
         return Ok(stream);
     }
-    Err(Error::Firmware(format!(
-        "{FILE} (or {rbf_name}); get it with sigrok-fwextract-intronix-logicport, see docs/DEVICES.md"
-    )))
+    let data = oxrok_core::firmware::read(
+        FILE,
+        &format!(
+            "or {rbf_name}; get it with sigrok-fwextract-intronix-logicport, see docs/DEVICES.md"
+        ),
+    )?;
+    image_from_ccf(&data, image)
 }
 
 #[cfg(test)]
