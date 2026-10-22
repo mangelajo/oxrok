@@ -141,3 +141,45 @@ it. Firmware uploads use `oxrok-ezusb` and `wait_for_renumeration`.
 - The user's `-l 4` log is the first debugging tool: keep the debug
   messages at the protocol steps (resync, image probe, readout window,
   transfer plan), and filter library noise out of it.
+- macOS after a firmware renumeration: the device's configuration is
+  active and the descriptors list the interface, yet claiming it fails
+  with "interface not found". libusb never shows this because it sets
+  the configuration on every open; the nusb backend now does the same
+  when a claim fails, then reopens the device. A device that uploads
+  firmware needs a power cycle to test this path, not a replug of the
+  cable alone if the board keeps power.
+- A bench driven over a serial port: opening the port resets an ESP32
+  (DTR), so state set in one process (pin maps, levels) is gone in the
+  next. Keep one connection open across an experiment; the bench tool
+  has `--delay` for that. The symptom was a capture of boot glitches
+  and a sequence played on the wrong pins.
+- Ad hoc comparison loops in zsh: an unquoted `$var` stays one word, so
+  both tools get a mangled command, both print nothing, and the
+  outputs compare equal. Count the oracle's lines in every comparison
+  and treat zero as a failure; use `${=var}` or `sh`.
+- Run the whole workspace's tests before committing, not the crate's
+  alone; a changed listing or default breaks goldens elsewhere.
+
+## Porting a decoder
+
+The decoder runtime mirrors libsigrokdecode's Python API, so a native
+decoder is written from the protocol and the `pd.py` is the oracle for
+classes, rows, texts and sample ranges. What mattered for uart, i2c and
+spi:
+
+- Keep the class indices, rows and binary classes of the upstream
+  decoder, including its quirks that selections depend on (uart tags
+  stop bits with the parity-ok class).
+- `wait` semantics: the first sample is examined in place, edges need a
+  previous sample, `skip` counts from the current sample, unassigned
+  channels read 0xff. Stacked decoders get their items synchronously,
+  before the lower decoder continues, which fixes the output order.
+- Compare at `-l 4` (sample ranges, class names, all texts) against
+  sigrok-cli on a synthetic capture first, then on a bench capture.
+- The Python host sets `options`, `samplenum` and `matched` on the
+  instance, not as properties of the base class: decoders define class
+  attributes of the same names (`options` is their option table) and
+  an instance attribute is what shadows them.
+- In a crate that imports `oxrok_core::Result`, write
+  `std::result::Result::ok` in iterator chains; the alias changes the
+  meaning of `Result::ok`.
