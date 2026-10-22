@@ -66,6 +66,7 @@ release may change the library API.
   firmware files.
 - `oxrok_core::SoftTrigger` and `PreTriggerBuffer`: host side triggers
   for streaming devices.
+- `docs/DRIVER_PORTING.md` grew with the fx2lafw and parity lessons.
 - `tools/diffcli.sh`: runs the documented flows through sigrok-cli and
   oxrok and diffs them, with `--hw` for the LogicPort and fx2lafw cases.
 - The demo device honours triggers through the software trigger.
