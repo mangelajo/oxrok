@@ -48,6 +48,40 @@ impl fmt::Display for UsbId {
     }
 }
 
+/// The class of one interface, as enumeration reports it without
+/// opening the device.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct InterfaceClass {
+    /// Interface number.
+    pub number: u8,
+    /// `bInterfaceClass`.
+    pub class: u8,
+    /// `bInterfaceSubClass`.
+    pub subclass: u8,
+    /// `bInterfaceProtocol`.
+    pub protocol: u8,
+}
+
+/// One endpoint of an interface.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct EndpointDesc {
+    /// `bEndpointAddress`, bit 7 set for IN.
+    pub address: u8,
+    /// Transfer type: 0 control, 1 isochronous, 2 bulk, 3 interrupt.
+    pub transfer_type: u8,
+    /// `wMaxPacketSize`.
+    pub max_packet_size: u16,
+}
+
+/// An interface of the active configuration with its endpoints.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct InterfaceDesc {
+    /// Class, subclass and protocol.
+    pub class: InterfaceClass,
+    /// The endpoints of the first alternate setting.
+    pub endpoints: Vec<EndpointDesc>,
+}
+
 /// What enumeration knows about a device before it is opened.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct UsbDeviceInfo {
@@ -67,6 +101,9 @@ pub struct UsbDeviceInfo {
     pub product: Option<String>,
     /// Serial number string.
     pub serial: Option<String>,
+    /// The interface classes, for picking devices by class (USBTMC,
+    /// HID) before opening them.
+    pub interfaces: Vec<InterfaceClass>,
     /// Backend specific handle used to open the device again.
     pub(crate) handle: Handle,
 }
@@ -173,6 +210,9 @@ pub trait Transport: Send {
 
     /// `wMaxPacketSize` of an endpoint of a claimed interface.
     fn max_packet_size(&mut self, endpoint: u8) -> Result<usize>;
+
+    /// The interfaces of the active configuration with their endpoints.
+    fn interfaces(&mut self) -> Result<Vec<InterfaceDesc>>;
 
     /// A control transfer that sends `data`.
     fn control_out(&mut self, req: ControlRequest, data: &[u8], timeout: Duration) -> Result<()>;

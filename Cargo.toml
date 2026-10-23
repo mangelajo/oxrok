@@ -6,6 +6,7 @@ members = [
     "crates/usb",
     "crates/serial",
     "crates/hid",
+    "crates/scpi",
     "crates/ftdi",
     "crates/ezusb",
     "crates/drivers/demo",
@@ -35,6 +36,7 @@ oxrok-usb = { path = "crates/usb", version = "0.1.0", default-features = false }
 oxrok-ftdi = { path = "crates/ftdi", version = "0.1.0" }
 oxrok-serial = { path = "crates/serial", version = "0.1.0" }
 oxrok-hid = { path = "crates/hid", version = "0.1.0" }
+oxrok-scpi = { path = "crates/scpi", version = "0.1.0" }
 oxrok-dmm = { path = "crates/dmm", version = "0.1.0" }
 oxrok-driver-serial-dmm = { path = "crates/drivers/serial-dmm", version = "0.1.0" }
 oxrok-ezusb = { path = "crates/ezusb", version = "0.1.0" }

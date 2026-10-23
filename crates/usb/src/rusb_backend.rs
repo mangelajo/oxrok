@@ -36,6 +36,21 @@ pub(crate) fn list() -> Result<Vec<UsbDeviceInfo>> {
             Err(_) => (None, None, None),
         };
         let v = desc.device_version();
+        let interfaces = d
+            .active_config_descriptor()
+            .map(|c| {
+                c.interfaces()
+                    .filter_map(|i| {
+                        i.descriptors().next().map(|d| crate::InterfaceClass {
+                            number: d.interface_number(),
+                            class: d.class_code(),
+                            subclass: d.sub_class_code(),
+                            protocol: d.protocol_code(),
+                        })
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
         out.push(UsbDeviceInfo {
             vendor_id: desc.vendor_id(),
             product_id: desc.product_id(),
@@ -47,6 +62,7 @@ pub(crate) fn list() -> Result<Vec<UsbDeviceInfo>> {
             manufacturer,
             product,
             serial,
+            interfaces,
             handle: Handle::Rusb { bus: d.bus_number(), address: d.address() },
         });
     }
@@ -121,6 +137,31 @@ impl Transport for Rusb {
             }
         }
         Err(Error::device("no such endpoint"))
+    }
+
+    fn interfaces(&mut self) -> Result<Vec<crate::InterfaceDesc>> {
+        let config = self.device.active_config_descriptor().map_err(map)?;
+        let mut out = Vec::new();
+        for i in config.interfaces() {
+            let Some(d) = i.descriptors().next() else { continue };
+            out.push(crate::InterfaceDesc {
+                class: crate::InterfaceClass {
+                    number: d.interface_number(),
+                    class: d.class_code(),
+                    subclass: d.sub_class_code(),
+                    protocol: d.protocol_code(),
+                },
+                endpoints: d
+                    .endpoint_descriptors()
+                    .map(|e| crate::EndpointDesc {
+                        address: e.address(),
+                        transfer_type: e.transfer_type() as u8,
+                        max_packet_size: e.max_packet_size(),
+                    })
+                    .collect(),
+            });
+        }
+        Ok(out)
     }
 
     fn control_out(&mut self, req: ControlRequest, data: &[u8], timeout: Duration) -> Result<()> {

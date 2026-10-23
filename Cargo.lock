@@ -859,6 +859,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "oxrok-scpi"
+version = "0.1.0"
+dependencies = [
+ "log",
+ "oxrok-core",
+ "oxrok-serial",
+ "oxrok-usb",
+]
+
+[[package]]
 name = "oxrok-serial"
 version = "0.1.0"
 dependencies = [

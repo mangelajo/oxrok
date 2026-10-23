@@ -48,6 +48,15 @@ fn info(d: &nusb::DeviceInfo) -> UsbDeviceInfo {
         manufacturer: d.manufacturer_string().map(str::to_owned),
         product: d.product_string().map(str::to_owned),
         serial: d.serial_number().map(str::to_owned),
+        interfaces: d
+            .interfaces()
+            .map(|i| crate::InterfaceClass {
+                number: i.interface_number(),
+                class: i.class(),
+                subclass: i.subclass(),
+                protocol: i.protocol(),
+            })
+            .collect(),
         handle: Handle::Nusb(d.id()),
     }
 }
@@ -234,6 +243,34 @@ impl Transport for Nusb {
             .find(|e| e.address() == endpoint)
             .map(|e| e.max_packet_size())
             .ok_or_else(|| Error::device("no such endpoint"))
+    }
+
+    fn interfaces(&mut self) -> Result<Vec<crate::InterfaceDesc>> {
+        let config = self
+            .device
+            .active_configuration()
+            .map_err(|e| Error::device(format!("configuration: {e}")))?;
+        let mut out = Vec::new();
+        for group in config.interfaces() {
+            let Some(d) = group.alt_settings().next() else { continue };
+            out.push(crate::InterfaceDesc {
+                class: crate::InterfaceClass {
+                    number: d.interface_number(),
+                    class: d.class(),
+                    subclass: d.subclass(),
+                    protocol: d.protocol(),
+                },
+                endpoints: d
+                    .endpoints()
+                    .map(|e| crate::EndpointDesc {
+                        address: e.address(),
+                        transfer_type: e.transfer_type() as u8,
+                        max_packet_size: e.max_packet_size() as u16,
+                    })
+                    .collect(),
+            });
+        }
+        Ok(out)
     }
 
     fn control_out(&mut self, req: ControlRequest, data: &[u8], timeout: Duration) -> Result<()> {

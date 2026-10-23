@@ -86,6 +86,9 @@ pub enum Call {
     Reset,
     /// `max_packet_size`.
     MaxPacketSize(u8),
+    /// `interfaces`; the outcome data is the descriptors encoded by
+    /// [`encode_interfaces`].
+    Interfaces,
     /// `control_out`.
     ControlOut(ControlRequest, Payload),
     /// `control_in` with the requested length.
@@ -174,6 +177,16 @@ impl Fixture {
                 let _ = write!(s, " {key}={}", quote(v));
             }
         }
+        if !d.interfaces.is_empty() {
+            let list: Vec<String> = d
+                .interfaces
+                .iter()
+                .map(|i| {
+                    format!("{}:{:02x}:{:02x}:{:02x}", i.number, i.class, i.subclass, i.protocol)
+                })
+                .collect();
+            let _ = write!(s, " interfaces={}", list.join(","));
+        }
         s.push('\n');
         for step in &self.steps {
             match &step.call {
@@ -190,6 +203,7 @@ impl Fixture {
                 Call::MaxPacketSize(ep) => {
                     let _ = write!(s, "mps {ep:02x}");
                 }
+                Call::Interfaces => s.push_str("interfaces"),
                 Call::ControlOut(r, data) => {
                     let _ = write!(
                         s,
@@ -323,10 +337,72 @@ fn parse_device(s: &str) -> std::result::Result<UsbDeviceInfo, String> {
             "manufacturer" => d.manufacturer = Some(value),
             "product" => d.product = Some(value),
             "serial" => d.serial = Some(value),
+            "interfaces" => {
+                for item in value.split(',') {
+                    let f: Vec<&str> = item.split(':').collect();
+                    if f.len() != 4 {
+                        return Err("bad interfaces field".into());
+                    }
+                    d.interfaces.push(crate::InterfaceClass {
+                        number: f[0].parse().map_err(|_| "bad interface number")?,
+                        class: hex16(f[1])? as u8,
+                        subclass: hex16(f[2])? as u8,
+                        protocol: hex16(f[3])? as u8,
+                    });
+                }
+            }
             other => return Err(format!("unknown device field {other}")),
         }
     }
     Ok(d)
+}
+
+/// Encodes interface descriptors for a fixture: per interface its
+/// number, class, subclass, protocol and endpoint count, then per
+/// endpoint the address, transfer type and packet size (little endian).
+pub fn encode_interfaces(list: &[crate::InterfaceDesc]) -> Vec<u8> {
+    let mut out = Vec::new();
+    for i in list {
+        out.extend([i.class.number, i.class.class, i.class.subclass, i.class.protocol]);
+        out.push(i.endpoints.len() as u8);
+        for e in &i.endpoints {
+            out.push(e.address);
+            out.push(e.transfer_type);
+            out.extend(e.max_packet_size.to_le_bytes());
+        }
+    }
+    out
+}
+
+/// Decodes what [`encode_interfaces`] produced.
+pub fn decode_interfaces(data: &[u8]) -> Result<Vec<crate::InterfaceDesc>> {
+    let bad = || Error::device("replay: malformed interface descriptors");
+    let mut out = Vec::new();
+    let mut pos = 0;
+    while pos < data.len() {
+        let head = data.get(pos..pos + 5).ok_or_else(bad)?;
+        pos += 5;
+        let mut desc = crate::InterfaceDesc {
+            class: crate::InterfaceClass {
+                number: head[0],
+                class: head[1],
+                subclass: head[2],
+                protocol: head[3],
+            },
+            endpoints: Vec::new(),
+        };
+        for _ in 0..head[4] {
+            let e = data.get(pos..pos + 4).ok_or_else(bad)?;
+            pos += 4;
+            desc.endpoints.push(crate::EndpointDesc {
+                address: e[0],
+                transfer_type: e[1],
+                max_packet_size: u16::from_le_bytes([e[2], e[3]]),
+            });
+        }
+        out.push(desc);
+    }
+    Ok(out)
 }
 
 fn payload(p: &Payload) -> String {
@@ -434,6 +510,7 @@ fn parse_call(s: &str) -> std::result::Result<Call, String> {
         "release" => Call::Release(num(1)? as u8),
         "reset" => Call::Reset,
         "mps" => Call::MaxPacketSize(h8(1)?),
+        "interfaces" => Call::Interfaces,
         "ctl_out" => Call::ControlOut(request()?, parse_payload(field(5)?)?),
         "ctl_in" => Call::ControlIn(request()?, num(5)?),
         "bulk_out" => Call::BulkOut(h8(1)?, parse_payload(field(2)?)?),
@@ -453,7 +530,7 @@ fn parse_outcome(s: &str, call: &Call) -> std::result::Result<Outcome, String> {
         return Ok(Outcome::Err(kind.to_owned(), msg));
     }
     Ok(match call {
-        Call::ControlIn(..) | Call::BulkIn(..) => Outcome::Data(unhex(s)?),
+        Call::ControlIn(..) | Call::BulkIn(..) | Call::Interfaces => Outcome::Data(unhex(s)?),
         _ => Outcome::Count(s.parse().map_err(|_| format!("bad count {s}"))?),
     })
 }
@@ -563,6 +640,11 @@ impl Transport for Recorder {
     fn max_packet_size(&mut self, endpoint: u8) -> Result<usize> {
         let r = self.inner.max_packet_size(endpoint);
         self.log(Call::MaxPacketSize(endpoint), r, |n| Outcome::Count(*n))
+    }
+
+    fn interfaces(&mut self) -> Result<Vec<crate::InterfaceDesc>> {
+        let r = self.inner.interfaces();
+        self.log(Call::Interfaces, r, |d| Outcome::Data(encode_interfaces(d)))
     }
 
     fn control_out(&mut self, req: ControlRequest, data: &[u8], timeout: Duration) -> Result<()> {
@@ -848,6 +930,10 @@ impl Transport for Replay {
 
     fn max_packet_size(&mut self, endpoint: u8) -> Result<usize> {
         self.state().count(&Call::MaxPacketSize(endpoint))
+    }
+
+    fn interfaces(&mut self) -> Result<Vec<crate::InterfaceDesc>> {
+        decode_interfaces(&self.state().data(&Call::Interfaces)?)
     }
 
     fn control_out(&mut self, req: ControlRequest, data: &[u8], _timeout: Duration) -> Result<()> {
