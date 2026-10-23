@@ -80,6 +80,27 @@ Cargo features: `cli` (the binary, default), `nusb` (default) and
 `libusb` USB backends, `python`. `hil/oxrok-hil` is the bench tool, not
 published.
 
+## Beyond sigrok: triggers
+
+sigrok's trigger model stops at one condition per channel per stage.
+oxrok extends the `-t` syntax where the hardware can follow, and the
+parser rejects what a device cannot do:
+
+```sh
+-t 'D0=r*5'          # the fifth rising edge; *5c for the fifth in a row
+-t 'D0=1>50us'       # D0 high for longer than 50 us (or >100 in samples)
+-t 'D0-D2=3..5'      # the value on D2 D1 D0 inside 3..5; =!7 for outside
+-t 'D0=r;D1=1'       # stages in sequence, as in sigrok-cli
+-t 'D0=r|D1=r'       # either stage; & for both, in any order
+```
+
+The LogicPort runs all of these in its FPGA, with two stages, which is
+what the hardware offers and its vendor software exposes. The software
+trigger behind the demo and fx2lafw devices takes counts and durations.
+These forms, the LogicPort's clock qualifier, setup and hold sampling
+points, input inversion and frequency counter are not in sigrok; see
+`docs/CLI.md` and `docs/LOGICPORT.md`.
+
 ## Compatibility with sigrok
 
 - Configuration keys use the sigrok ids (`samplerate`, `limit_samples`,
