@@ -392,6 +392,9 @@ fn es_flags(buf: &[u8], v: Es519xx) -> EsFlags {
 }
 
 impl EsFlags {
+    /// Exactly one function: libsigrok also accepts none, which lets
+    /// any 14 bytes ending in CR LF through (a boot banner, say), and
+    /// a packet without a function yields no reading anyway.
     fn valid(&self) -> bool {
         count(&[self.micro, self.milli]) <= 1
             && count(&[
@@ -404,7 +407,8 @@ impl EsFlags {
                 self.continuity,
                 self.diode,
                 self.rpm,
-            ]) <= 1
+                self.duty_cycle,
+            ]) == 1
             && !(self.ac && self.dc)
     }
 }
@@ -705,6 +709,8 @@ mod tests {
         // Not repeated: not a packet.
         p[12] = b'9';
         assert!(!es519xx_valid(&p, Es519xx::Baud2400x11));
+        // Text that happens to end in CR LF is not a packet either.
+        assert!(!es519xx_valid(b"SIGGEN READY\r\n", Es519xx::Baud19200x14));
     }
 
     #[test]

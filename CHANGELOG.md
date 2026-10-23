@@ -15,6 +15,12 @@ release may change the library API.
 
 ### Added
 
+- `oxrok-serial`: serial port transport with the sigrok `serialcomm`
+  syntax and record and replay fixtures (`OXROK_SERIAL_RECORD`).
+- `oxrok-dmm`: multimeter packet parsers (FS9721, FS9922, DTM0660, Metex
+  14 byte, VC-96, ASYC-II, M2110, UT71x, ES519xx, VC-870, RadioShack
+  22-812, BM25x, QM1578) and `oxrok-driver-serial-dmm` with 61 meter
+  ids, one driver per meter as in sigrok.
 - Trigger extras in the shared model and the `-t` grammar: occurrence
   counts (`D0=r*5`, consecutive `D0=r*5c`), durations (`D0=1>100`,
   `D0=1>50us`), value ranges on a channel group (`D0-D2=3..5`,

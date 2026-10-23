@@ -95,6 +95,21 @@ command, then loop on `next` until the sample limit or the stop flag.
 `PreTriggerBuffer` keeps the capture ratio's worth of samples before
 it. Firmware uploads use `oxrok-ezusb` and `wait_for_renumeration`.
 
+## Serial devices
+
+`oxrok-serial` is the counterpart of libsigrok's `serial.c`: a `Port`
+trait (read with a timeout, write, parameters, RTS and DTR), the
+`serialcomm` syntax in `Params::parse`, and `Recorder`/`Replay` with a
+text fixture like the USB one. A driver takes `conn=` and an optional
+`serialcomm=`, opens the port with `oxrok_serial::open` (which records
+when `OXROK_SERIAL_RECORD` is set) and keeps the port it probed with:
+reopening toggles the handshake lines, and adapters such as the CP2102
+on the ESP32 reset their board on that. Packet based protocols are
+pure parsers in `oxrok-dmm` (`valid` and `parse` on a byte slice), so
+each one tests against packets written from its layout without a
+meter. A validity check should demand a recognised function, not only
+a terminator: fourteen bytes ending in CR LF is also a boot banner.
+
 ## Beyond libsigrok's keys
 
 A device may do more than libsigrok's key set covers. Two hooks:

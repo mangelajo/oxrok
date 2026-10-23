@@ -188,6 +188,15 @@ if [ $hw = 1 ]; then
     gen --clk 0
     case_ "logicport rle" -- -d $LP -c samplerate=1M:rle=on -C CLK1 --samples 500 -O bits
     case_ "logicport 500M" -- -d $LP -c samplerate=500M -C CLK1 --samples 100 -O hex
+    # Serial multimeters: the ESP32 plays the meter on its own serial
+    # port (EMIT keeps emitting across the reset that opening the port
+    # causes), at its fixed 921600 baud.
+    DMMPORT=${DMMPORT:-/dev/cu.usbserial-0001}
+    gen --cmd "EMIT 200 60 3131323334353b3030303a300d0a"
+    case_ "serial dmm ut61e" -- -d uni-t-ut61e-ser:conn=$DMMPORT:serialcomm=921600/8n1 --samples 3
+    gen --cmd "EMIT 200 60 1720354d5b617f8297a0b0c0d4e0"
+    case_ "serial dmm fs9721" -- -d uni-t-ut60a-ser:conn=$DMMPORT:serialcomm=921600/8n1 --samples 2
+    gen --cmd "EMIT 0 0"
     case_ "fx2lafw show" --keep-header -- -d fx2lafw --show
     case_ "fx2lafw bits 1M" -- -d fx2lafw -c samplerate=1M --samples 64 -O bits
     case_ "fx2lafw hex 24M" -- -d fx2lafw -c samplerate=24M --samples 1024 -O hex

@@ -10,6 +10,9 @@
 | 5 | CLI parity pass and the differential script | done 2026-10-22: `tools/diffcli.sh` runs 29 software and 8 hardware cases against sigrok-cli 0.8.0-git, all clean; module listings compared by option name |
 | 6 | decoder runtime, native uart, i2c, spi, Python decoder host, conformance fixtures | done 2026-10-22: runtime, native uart, i2c, spi, stacking and the PyO3 host (all 112 upstream decoders load, checked ones identical to sigrok-cli); UART, I2C and SPI fixtures from the bench |
 | 6a | LogicPort extras: trigger counts, durations, value ranges, or/and combines, clock qualifier, sample point, inversion, frequency counter | done 2026-10-22: `-t` grammar in core, options on the device, 60 bench checks pass; the verification below is still open |
+| 6b | serial transport and the serial multimeter family | done 2026-10-23: `oxrok-serial` with record and replay, `oxrok-dmm` with 13 chipset parsers, 61 meters; UT61E and UT60A streams from the ESP32 identical to sigrok-cli |
+| 6c | SCPI transport (USBTMC, TCP, serial) and the first scope driver (`rigol-ds`) | a Rigol scope captures frames; replay fixtures for the other SCPI drivers |
+| 6d | the remaining USB logic analyzers, one per recording | each ships a replay fixture; bench runs where the device is at hand |
 | 7 | packaging: static binaries, Homebrew, AUR, udev rules | a clean machine installs and captures without any sigrok package |
 | 8 | release 0.1 | tags, changelog, guides |
 

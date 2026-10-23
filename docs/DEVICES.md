@@ -59,6 +59,44 @@ power cycle) configures and captures in about 4 s: the open sees no
 answer, loads the image by bit-bang, resyncs once while the FPGA comes
 up, and proceeds.
 
+## Serial multimeters
+
+Handheld meters with a serial cable, one driver id per meter as in
+sigrok (`uni-t-ut61e-ser`, `voltcraft-vc820-ser`, `metex-m3640d`, ...;
+`oxrok -L` lists them). The byte stream does not say which meter is
+talking, so the driver id picks the chipset protocol and the cable's
+serial parameters, `conn=` names the port and `serialcomm=` overrides
+the parameters:
+
+```
+oxrok -d uni-t-ut61e-ser:conn=/dev/ttyUSB0 --samples 10
+oxrok -d metex-m3640d:conn=/dev/ttyUSB0:serialcomm=1200/7n2/rts=0/dtr=1 --continuous
+```
+
+The scan listens for up to three seconds for a packet the chipset
+parser accepts. Readings stream as analog packets, one per display, on
+channels `P1` (and `P2` to `P4` for the four display Metex meters);
+`--samples` counts packets, `--time` limits the run, `--continuous`
+runs until stopped.
+
+Chipsets ported: FS9721, FS9922, DTM0660, Metex 14 byte (single and
+four display), VC-96, ASYC-II, M2110, UT71x, ES519xx (11 and 14 byte,
+2400 and 19200 baud variants), VC-870, RadioShack 22-812, Brymen BM25x,
+Digitech QM1578: 61 meters. Not yet: the Brymen BM52x, BM82x and BM86x
+and the Victor meters (HID cables), the Brymen BM85x (variable length
+packets), the EEVblog 121GW, the Mastech MS2115B and MS8250D and the
+Meterman 38XR.
+
+Verification without a meter: the parsers have tests built from the
+packet layouts, the driver has replay tests on hand written serial
+fixtures (`OXROK_SERIAL_RECORD=FILE` records a real session into the
+same format), and the ESP32 generator plays a meter on its own serial
+port (`EMIT <ms> <seconds> <hex>`, kept in flash across the reset that
+opening the port causes). Verified 2026-10-23 that way: the UT61E and
+UT60A streams give the same readings through oxrok and sigrok-cli
+(`tools/diffcli.sh --hw`, cases `serial dmm`). The ESP32 port runs at
+921600 baud, so those runs pass `serialcomm=921600/8n1`.
+
 ## fx2lafw devices
 
 Saleae Logic and its clones, the CWAV USBee models, the bare Cypress FX2

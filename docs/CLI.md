@@ -79,4 +79,6 @@ Deliberate, and kept small:
   `scale` options of the `csv` output.
 - The `csv` input and the other long tail input modules (ChronoVu LA8,
   STF, Trace32, ISF, WAV, LogicPort .lpf).
-- fx2lafw and the other hardware drivers: phase 4 of the roadmap.
+- The hardware drivers beyond the LogicPort, fx2lafw and the serial
+  multimeters: SCPI instruments and the USB logic analyzers come next
+  (`docs/ROADMAP.md`).

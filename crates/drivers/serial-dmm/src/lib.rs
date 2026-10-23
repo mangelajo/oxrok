@@ -107,13 +107,14 @@ impl Driver for SerialDmmDriver {
         let mut port = oxrok_serial::open(&conn, params)?;
         log::info!("Probing serial port {conn}.");
         let found = detect(port.as_mut(), &self.0.protocol, DETECT_TIMEOUT)?;
-        drop(port);
         if !found {
             log::info!("No {} packets on {conn}.", self.0.id);
             return Ok(Vec::new());
         }
         log::info!("Found device on port {conn}.");
-        Ok(vec![Box::new(DmmDevice::new(self.0, conn, params, None))])
+        // The port stays open for the device: reopening it would toggle
+        // the handshake lines again, which resets some adapters.
+        Ok(vec![Box::new(DmmDevice::new(self.0, conn, params, Some(port)))])
     }
 }
 
