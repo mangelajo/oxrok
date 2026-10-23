@@ -7,18 +7,45 @@ oxrok is not part of the sigrok project. It keeps sigrok's file formats,
 command line flags and decoder ids so existing tools, scripts and habits
 carry over.
 
+## How it was written
+
+oxrok is, so far, a translation of the sigrok C and Python code into
+Rust done by a large language model (Claude), with a human directing
+the work: choosing what to port, reviewing the structure and the
+protocol handling, wiring up the bench hardware and running the
+comparisons. Every driver and format is checked against sigrok-cli's
+output for the same command, byte for byte after the version line,
+either on real hardware or on a microcontroller that emulates the
+device. Treat code that has only seen the emulator or a recording as
+untested until the table below says otherwise, and read it with that
+in mind.
+
 ## Status
 
-Early. The workspace builds on Linux, macOS and Windows with a demo
-device, a sigrok-cli style command line, the `bits`, `hex`, `ascii`,
-`analog`, `csv`, `vcd`, `binary` and `srzip` outputs, and `.sr`, VCD and
-binary inputs, a USB transport (nusb or libusb) with record and replay,
-and two hardware drivers: the Intronix LogicPort LA1034, checked against
-the libsigrok driver byte for byte and against a signal generator on the
-bench, and fx2lafw for Saleae Logic clones and other FX2 boards, with
-the firmware upload. Native `uart`, `i2c` and `spi` decoders print what
-libsigrokdecode prints, and with the `python` feature the unchanged
+Early. The crate builds on Linux, macOS and Windows with a sigrok-cli
+style command line, the `bits`, `hex`, `ascii`, `analog`, `csv`, `vcd`,
+`binary` and `srzip` outputs, `.sr`, VCD and binary inputs, USB, serial,
+HID and SCPI transports with record and replay, eight driver families
+and native `uart`, `i2c` and `spi` decoders that print what
+libsigrokdecode prints. With the `python` feature the unchanged
 libsigrokdecode decoders run too. See `docs/ROADMAP.md`.
+
+### Hardware validated so far
+
+| driver | checked on | how |
+|---|---|---|
+| `intronix-logicport` | two LogicPort LA1034 units | 60 bench checks with an ESP32 signal generator, captures identical to sigrok-cli |
+| `fx2lafw` | a Saleae Logic clone (`0925:3881`) | firmware upload, captures identical to sigrok-cli |
+| `rigol-ds` | a Rigol DS1102E | `--show`, frames and settings identical to sigrok-cli; also on a Pico emulating the scope over USBTMC |
+| `raspberrypi-pico` | a Pico running the sigrok-pico firmware | digital, analog and mixed captures identical to sigrok-cli |
+| `serial-dmm` (UT61E, UT60A) | meter streams replayed by an ESP32 | readings identical to sigrok-cli; no real meter yet |
+| HID cables (BU-86X, CH9325, Victor), UT-D04 meters, UT32x | a Pico emulating the cable | readings identical to sigrok-cli; CP2110 unverified |
+| `dcttech-usbrelay`, `microchip-pickit2` | a Pico emulating the device | identical to sigrok-cli; no real board yet |
+| `uart`, `i2c`, `spi` decoders | captures from an ESP32 | annotations identical to libsigrokdecode |
+
+The other 67 multimeters, the other Rigol and Agilent scope series and
+the CP2110 cable are ports with replay tests only. `docs/DEVICES.md`
+has the details per device and `hil/` the firmware used on the bench.
 
 ```sh
 cargo install --path .                             # add --features python for the Python decoders
@@ -52,7 +79,6 @@ One crate, `oxrok`, with the library and the binary. Modules:
 Cargo features: `cli` (the binary, default), `nusb` (default) and
 `libusb` USB backends, `python`. `hil/oxrok-hil` is the bench tool, not
 published.
-| `oxrok` | the command line tool |
 
 ## Compatibility with sigrok
 
