@@ -572,6 +572,7 @@ dependencies = [
  "oxrok-driver-demo",
  "oxrok-driver-fx2lafw",
  "oxrok-driver-logicport",
+ "oxrok-driver-serial-dmm",
  "oxrok-formats",
  "oxrok-pydecode",
  "oxrok-usb",
@@ -603,6 +604,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "oxrok-dmm"
+version = "0.1.0"
+dependencies = [
+ "log",
+ "oxrok-core",
+]
+
+[[package]]
 name = "oxrok-driver-demo"
 version = "0.1.0"
 dependencies = [
@@ -628,6 +637,16 @@ dependencies = [
  "oxrok-core",
  "oxrok-ftdi",
  "oxrok-usb",
+]
+
+[[package]]
+name = "oxrok-driver-serial-dmm"
+version = "0.1.0"
+dependencies = [
+ "log",
+ "oxrok-core",
+ "oxrok-dmm",
+ "oxrok-serial",
 ]
 
 [[package]]
@@ -678,6 +697,15 @@ dependencies = [
  "oxrok-core",
  "oxrok-decode",
  "pyo3",
+]
+
+[[package]]
+name = "oxrok-serial"
+version = "0.1.0"
+dependencies = [
+ "log",
+ "oxrok-core",
+ "serialport",
 ]
 
 [[package]]

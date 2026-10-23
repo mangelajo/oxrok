@@ -4,11 +4,14 @@ members = [
     "crates/core",
     "crates/formats",
     "crates/usb",
+    "crates/serial",
     "crates/ftdi",
     "crates/ezusb",
     "crates/drivers/demo",
     "crates/drivers/logicport",
     "crates/drivers/fx2lafw",
+    "crates/drivers/serial-dmm",
+    "crates/dmm",
     "crates/decode",
     "crates/decoders",
     "crates/pydecode",
@@ -29,6 +32,9 @@ oxrok-core = { path = "crates/core", version = "0.1.0" }
 oxrok-formats = { path = "crates/formats", version = "0.1.0" }
 oxrok-usb = { path = "crates/usb", version = "0.1.0", default-features = false }
 oxrok-ftdi = { path = "crates/ftdi", version = "0.1.0" }
+oxrok-serial = { path = "crates/serial", version = "0.1.0" }
+oxrok-dmm = { path = "crates/dmm", version = "0.1.0" }
+oxrok-driver-serial-dmm = { path = "crates/drivers/serial-dmm", version = "0.1.0" }
 oxrok-ezusb = { path = "crates/ezusb", version = "0.1.0" }
 oxrok-driver-demo = { path = "crates/drivers/demo", version = "0.1.0" }
 oxrok-driver-logicport = { path = "crates/drivers/logicport", version = "0.1.0" }
