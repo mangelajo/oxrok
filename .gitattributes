@@ -1,0 +1,5 @@
+# Sources and docs are LF everywhere; the comparisons in the tests are
+# byte exact, so fixtures and recordings are never converted.
+* text=auto eol=lf
+tests/fixtures/** -text
+*.sr binary

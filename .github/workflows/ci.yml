@@ -34,7 +34,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - uses: taiki-e/install-action@nextest
-      - run: cargo nextest run --workspace --all-features
+      - run: cargo nextest run --workspace --all-features --no-fail-fast
       - run: cargo test --workspace --doc
 
   msrv:
@@ -57,5 +57,5 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - uses: taiki-e/install-action@nextest
       - run: sudo apt-get update && sudo apt-get install -y python3-dev libsigrokdecode4
-      - run: cargo nextest run -p oxrok --features python
+      - run: cargo nextest run -p oxrok --features python --no-fail-fast
       - run: cargo clippy -p oxrok --features python --all-targets
