@@ -21,7 +21,7 @@ libsigrokdecode prints, and with the `python` feature the unchanged
 libsigrokdecode decoders run too. See `docs/ROADMAP.md`.
 
 ```sh
-cargo install --path crates/cli                    # add --features python for the Python decoders
+cargo install --path .                             # add --features python for the Python decoders
 oxrok --scan
 oxrok -d demo:logic_channels=4 -g Logic -c pattern=walking-one --samples 20 -O bits
 oxrok -d demo --show
@@ -36,20 +36,22 @@ for the same command, which is how the test suite checks it.
 
 ## Layout
 
-| Crate | Content |
+One crate, `oxrok`, with the library and the binary. Modules:
+
+| module | contents |
 |---|---|
-| `oxrok-core` | config keys and values, packets, the `Driver` and `Device` traits, sessions, parsing helpers |
-| `oxrok-formats` | text outputs, the `.sr` session format, VCD, CSV and binary readers and writers |
-| `oxrok-usb` | the `Transport` trait, nusb and libusb backends, record and replay fixtures |
-| `oxrok-ftdi` | FT232/FT245 vendor requests and FIFO reads over a transport |
-| `oxrok-driver-demo` | a logic and analog pattern generator with no hardware |
-| `oxrok-ezusb` | Cypress FX2 firmware upload and renumeration |
-| `oxrok-driver-logicport` | Intronix LogicPort LA1034, see `docs/LOGICPORT.md` and `docs/DEVICES.md` |
-| `oxrok-driver-fx2lafw` | FX2 based analyzers running the sigrok fx2lafw firmware |
-| `oxrok-decode` | the decoder API, the sample scanner behind `wait`, instance threads |
-| `oxrok-decoders` | native decoders: `uart`, `i2c`, `spi` |
-| `oxrok-pydecode` | runs libsigrokdecode's Python decoders (feature `python`) |
-| `oxrok-hil` | hardware in the loop checks, not published |
+| `core` | config keys and values, packets, the `Driver` and `Device` traits, sessions, triggers, parsing helpers |
+| `formats` | text outputs, the `.sr` session format, VCD, CSV and binary readers and writers |
+| `usb`, `serial`, `hid`, `scpi` | transports, each with record and replay fixtures |
+| `ftdi`, `ezusb` | FTDI vendor requests and FIFO reads; Cypress FX2 firmware upload |
+| `dmm` | multimeter packet parsers |
+| `drivers::*` | demo, logicport, fx2lafw, serial_dmm, rigol_ds, raspberrypi_pico, dcttech_usbrelay, microchip_pickit2 |
+| `decode`, `decoders` | the decoder API and the native `uart`, `i2c`, `spi` decoders |
+| `pydecode` | runs libsigrokdecode's Python decoders (feature `python`) |
+
+Cargo features: `cli` (the binary, default), `nusb` (default) and
+`libusb` USB backends, `python`. `hil/oxrok-hil` is the bench tool, not
+published.
 | `oxrok` | the command line tool |
 
 ## Compatibility with sigrok

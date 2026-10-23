@@ -1,0 +1,586 @@
+// Counterpart in sigrok:
+//   libsigrok/src/hardware/microchip-pickit2/api.c,
+//   libsigrok/src/hardware/microchip-pickit2/protocol.c,
+//   libsigrok/src/hardware/microchip-pickit2/protocol.h,
+//   Copyright (C) 2018-2019 Gerhard Sittig <gerhard.sittig@gmx.net>
+//   (libsigrok libsigrok-unreleased-1855-g20baa77f).
+// This file is a port of the sigrok counterpart, GPL-3.0-or-later like
+//   it.
+
+//! The Microchip PICkit2 programmer as a three channel logic analyzer:
+//! 1024 samples at up to 1 MHz on pins 4 to 6, with a hardware trigger
+//! and a few pre-trigger positions. The driver is `microchip-pickit2`.
+//!
+//! The device is a HID; libsigrok reaches it with raw USB transfers,
+//! which macOS does not allow, so this driver speaks HID reports and
+//! works on every platform the HID transport does.
+
+#![forbid(unsafe_code)]
+#![allow(clippy::doc_markdown)]
+
+use crate::core::{
+    Access, Channel, ChannelGroup, ChannelKind, Device, DeviceClass, DeviceInfo, Driver, Error,
+    Key, OptionDesc, Packet, PacketSink, Result, Trigger, TriggerFeatures, TriggerMatch, Value,
+    ValueList,
+};
+use crate::hid::HidDevice;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
+use std::thread::JoinHandle;
+use std::time::Duration;
+
+const VENDOR_ID: u16 = 0x04d8;
+const PRODUCT_ID: u16 = 0x0033;
+const CHANNEL_COUNT: usize = 3;
+/// Samples per capture.
+pub const SAMPLE_COUNT: usize = 1024;
+const RAW_LEN: usize = 4 * 128;
+const PACKET: usize = 64;
+const CMD_READ: u8 = 0xac;
+const CMD_PAD: u8 = 0xad;
+const CMD_SETUP: u8 = 0xb8;
+const CMD_SETPOS: u8 = 0xb9;
+const SEL_BANK0: u8 = 0x06;
+const TIMEOUT: Duration = Duration::from_millis(250);
+
+const SCAN_OPTIONS: [Key; 2] = [Key::Conn, Key::ProbeNames];
+const CLASSES: [DeviceClass; 1] = [DeviceClass::LogicAnalyzer];
+static DEV_OPTIONS: [OptionDesc; 5] = [
+    OptionDesc::new(Key::Conn, Access::GET),
+    OptionDesc::new(Key::Samplerate, Access::GET_SET_LIST),
+    OptionDesc::new(Key::LimitSamples, Access::GET_SET),
+    OptionDesc::new(Key::TriggerMatch, Access::LIST),
+    OptionDesc::new(Key::CaptureRatio, Access::GET_SET_LIST),
+];
+const TRIGGER_MATCHES: [TriggerMatch; 4] =
+    [TriggerMatch::Zero, TriggerMatch::One, TriggerMatch::Rising, TriggerMatch::Falling];
+/// Capture ratio presets: an index into the trigger position table.
+pub static CAPTURE_RATIOS: &[u64] = &[0, 1, 2, 3, 4, 5, 6];
+/// Sample rates.
+pub static SAMPLERATES: &[u64] =
+    &[5_000, 10_000, 25_000, 50_000, 100_000, 250_000, 500_000, 1_000_000];
+const CHANNEL_NAMES: [&str; 3] = ["pin4", "pin5", "pin6"];
+/// Trigger position words per capture ratio preset: 10, 50 and 90
+/// percent of the first window, then 10 percent plus one to three
+/// window widths. Their derivation is unknown, as in libsigrok.
+const TRIGGER_POSITIONS: [u16; 7] = [0x0000, 0x03cc, 0x000a, 0x0248, 0x07b4, 0x0b9c, 0x0f84];
+const CHANNEL_TRIGGER_MASKS: [u8; 3] = [0x04, 0x08, 0x10];
+
+/// The driver.
+pub struct Pickit2Driver;
+
+impl Driver for Pickit2Driver {
+    fn id(&self) -> &'static str {
+        "microchip-pickit2"
+    }
+
+    fn long_name(&self) -> &'static str {
+        "Microchip PICkit2"
+    }
+
+    fn scan_options(&self) -> &'static [Key] {
+        &SCAN_OPTIONS
+    }
+
+    fn classes(&self) -> &'static [DeviceClass] {
+        &CLASSES
+    }
+
+    fn scan(&self, options: &[(Key, Value)]) -> Result<Vec<Box<dyn Device>>> {
+        let mut conn = format!("{VENDOR_ID:04x}.{PRODUCT_ID:04x}");
+        let mut probe_names = None;
+        for (key, value) in options {
+            match key {
+                Key::Conn => {
+                    value.as_str().ok_or_else(|| Error::arg("conn"))?.clone_into(&mut conn);
+                }
+                Key::ProbeNames => probe_names = value.as_str().map(str::to_owned),
+                other => return Err(Error::UnknownKey(other.id().to_owned())),
+            }
+        }
+        let (vid, pid) = match conn.split_once('.') {
+            Some((v, p)) => match (u16::from_str_radix(v, 16), u16::from_str_radix(p, 16)) {
+                (Ok(vid), Ok(pid)) => (vid, pid),
+                _ => return Err(Error::Arg(format!("Invalid conn '{conn}': use VID.PID."))),
+            },
+            None => return Err(Error::Arg(format!("Invalid conn '{conn}': use VID.PID."))),
+        };
+        let mut devices: Vec<Box<dyn Device>> = Vec::new();
+        for info in crate::hid::list()? {
+            if info.vendor_id != vid || info.product_id != pid {
+                continue;
+            }
+            let mut dev = Pickit2Device::new(info, conn.clone());
+            if let Some(spec) = &probe_names {
+                dev.name_channels(spec);
+            }
+            devices.push(Box::new(dev));
+        }
+        Ok(devices)
+    }
+}
+
+/// Settings kept between acquisitions.
+#[derive(Clone, Copy, Debug)]
+struct Settings {
+    samplerate_idx: usize,
+    limit_samples: u64,
+    capture_ratio_idx: usize,
+}
+
+/// One PICkit2.
+pub struct Pickit2Device {
+    info: DeviceInfo,
+    hid: Option<crate::hid::HidInfo>,
+    conn: String,
+    channels: Vec<Channel>,
+    groups: Vec<ChannelGroup>,
+    settings: Settings,
+    trigger: Option<Trigger>,
+    pending: Option<Box<dyn HidDevice>>,
+    dev: Arc<Mutex<Option<Box<dyn HidDevice>>>>,
+    worker: Option<(Arc<AtomicBool>, JoinHandle<()>)>,
+}
+
+impl Pickit2Device {
+    /// A device for a listed PICkit2; the HID is opened on `open`.
+    pub fn new(info: crate::hid::HidInfo, conn: String) -> Pickit2Device {
+        let mut d = Self::with_device(None, conn);
+        d.hid = Some(info);
+        d
+    }
+
+    /// A device on an already open HID, e.g. a fake in tests.
+    pub fn with_device(dev: Option<Box<dyn HidDevice>>, conn: String) -> Pickit2Device {
+        let channels: Vec<Channel> = CHANNEL_NAMES
+            .iter()
+            .enumerate()
+            .map(|(i, n)| Channel::new(i, ChannelKind::Logic, *n))
+            .collect();
+        Pickit2Device {
+            info: DeviceInfo {
+                driver: "microchip-pickit2",
+                vendor: "Microchip".to_owned(),
+                model: "PICkit2".to_owned(),
+                version: String::new(),
+                serial: String::new(),
+                conn: Some(conn.clone()),
+            },
+            hid: None,
+            conn,
+            groups: vec![ChannelGroup::new("Logic", (0..channels.len()).collect())],
+            channels,
+            settings: Settings {
+                samplerate_idx: SAMPLERATES.len() - 1,
+                limit_samples: SAMPLE_COUNT as u64,
+                capture_ratio_idx: 0,
+            },
+            trigger: None,
+            pending: dev,
+            dev: Arc::new(Mutex::new(None)),
+            worker: None,
+        }
+    }
+
+    /// Applies a `probe_names=` spec: comma separated names in order.
+    pub fn name_channels(&mut self, spec: &str) {
+        for (ch, name) in self.channels.iter_mut().zip(spec.split(',')) {
+            let name = name.trim();
+            if !name.is_empty() && name != "-" {
+                name.clone_into(&mut ch.name);
+            }
+        }
+    }
+}
+
+/// The SETUP packet for a trigger on the enabled channels: per channel
+/// the condition code of libsigrok (0 none, 1 zero, 2 one, 3 rising,
+/// 4 falling).
+pub fn setup_packet(
+    conditions: [u8; CHANNEL_COUNT],
+    ratio_idx: usize,
+    samplerate: u64,
+) -> [u8; PACKET] {
+    let (mut en, mut lvl, mut edge) = (0u8, 0u8, 0u8);
+    for (i, cond) in conditions.iter().enumerate() {
+        if *cond == 0 {
+            continue;
+        }
+        en |= CHANNEL_TRIGGER_MASKS[i];
+        if matches!(cond, 2 | 3) {
+            lvl |= CHANNEL_TRIGGER_MASKS[i];
+        }
+        if matches!(cond, 3 | 4) {
+            edge |= CHANNEL_TRIGGER_MASKS[i];
+        }
+    }
+    let rep = u8::from(en != 0);
+    let div = (1_000_000 / samplerate - 1) as u8;
+    let pos = TRIGGER_POSITIONS[ratio_idx.min(TRIGGER_POSITIONS.len() - 1)];
+    let mut p = [CMD_PAD; PACKET];
+    let head = [CMD_SETUP, 0x01, en, lvl, edge, rep, (pos & 0xff) as u8, (pos >> 8) as u8, div];
+    p[..head.len()].copy_from_slice(&head);
+    p
+}
+
+/// Converts the raw dump (two samples per byte, newest first) to one
+/// sample per byte with pin4 in bit 0, pin5 in bit 1 and pin6 in bit 2.
+pub fn convert_samples(raw: &[u8]) -> Vec<u8> {
+    let nibble = |n: u8| {
+        let mut b = 0u8;
+        if n & 0x04 != 0 {
+            b |= 0x01;
+        }
+        if n & 0x08 != 0 {
+            b |= 0x02;
+        }
+        if n & 0x01 != 0 {
+            b |= 0x04;
+        }
+        b
+    };
+    let mut out = Vec::with_capacity(raw.len() * 2);
+    for b in raw.iter().rev() {
+        out.push(nibble(b & 0x0f));
+        out.push(nibble(b >> 4));
+    }
+    out
+}
+
+fn send(dev: &mut dyn HidDevice, packet: &[u8; PACKET]) -> Result<()> {
+    // HID output reports carry the report id first; this device has
+    // none, so it is zero.
+    let mut report = [0u8; 1 + PACKET];
+    report[1..].copy_from_slice(packet);
+    dev.write_report(&report)
+}
+
+fn padded(bytes: &[u8]) -> [u8; PACKET] {
+    let mut p = [CMD_PAD; PACKET];
+    p[..bytes.len()].copy_from_slice(bytes);
+    p
+}
+
+/// Reads one 64 byte report, waiting for it.
+fn recv(dev: &mut dyn HidDevice, stop: &AtomicBool) -> Result<Option<[u8; PACKET]>> {
+    let mut buf = [0u8; crate::hid::MAX_REPORT];
+    loop {
+        if stop.load(Ordering::SeqCst) {
+            return Ok(None);
+        }
+        let n = dev.read_report(&mut buf, TIMEOUT)?;
+        if n == PACKET {
+            let mut p = [0u8; PACKET];
+            p.copy_from_slice(&buf[..PACKET]);
+            return Ok(Some(p));
+        }
+        if n > 0 {
+            return Err(Error::device(format!("USB short recv: {n}/{PACKET} bytes.")));
+        }
+    }
+}
+
+/// Reads the 512 raw sample bytes: two banks, two halves each, two
+/// READ packets per half.
+fn retrieve(dev: &mut dyn HidDevice, stop: &AtomicBool) -> Result<Option<Vec<u8>>> {
+    let mut raw = Vec::with_capacity(RAW_LEN);
+    for bank in 0..2u8 {
+        for offset in [0x00u8, 0x80] {
+            send(dev, &padded(&[CMD_SETPOS, offset, SEL_BANK0 + bank]))?;
+            for _ in 0..2 {
+                send(dev, &padded(&[CMD_READ]))?;
+                match recv(dev, stop)? {
+                    Some(p) => raw.extend_from_slice(&p),
+                    None => return Ok(None),
+                }
+            }
+        }
+    }
+    Ok(Some(raw))
+}
+
+impl Device for Pickit2Device {
+    fn info(&self) -> &DeviceInfo {
+        &self.info
+    }
+
+    fn classes(&self) -> &[DeviceClass] {
+        &CLASSES
+    }
+
+    fn channels(&self) -> &[Channel] {
+        &self.channels
+    }
+
+    fn channel_groups(&self) -> &[ChannelGroup] {
+        &self.groups
+    }
+
+    fn enable_channel(&mut self, pos: usize, enabled: bool) -> Result<()> {
+        let ch = self.channels.get_mut(pos).ok_or(Error::Arg(format!("No channel {pos}.")))?;
+        ch.enabled = enabled;
+        Ok(())
+    }
+
+    fn rename_channel(&mut self, pos: usize, name: &str) -> Result<()> {
+        let ch = self.channels.get_mut(pos).ok_or(Error::Arg(format!("No channel {pos}.")))?;
+        name.clone_into(&mut ch.name);
+        Ok(())
+    }
+
+    fn options(&self, group: Option<&str>) -> Result<Vec<OptionDesc>> {
+        match group {
+            None => Ok(DEV_OPTIONS.to_vec()),
+            Some("Logic") => Ok(Vec::new()),
+            Some(g) => Err(Error::ChannelGroup(g.to_owned())),
+        }
+    }
+
+    fn get(&self, key: &Key, _group: Option<&str>) -> Result<Value> {
+        Ok(match key {
+            Key::Conn => Value::Str(self.conn.clone()),
+            Key::Samplerate => Value::U64(SAMPLERATES[self.settings.samplerate_idx]),
+            Key::LimitSamples => Value::U64(self.settings.limit_samples),
+            Key::CaptureRatio => Value::U64(CAPTURE_RATIOS[self.settings.capture_ratio_idx]),
+            other => return Err(Error::UnknownKey(other.id().to_owned())),
+        })
+    }
+
+    fn set(&mut self, key: &Key, value: &Value, _group: Option<&str>) -> Result<()> {
+        let bad = || Error::Arg(format!("invalid value for {}", key.id()));
+        match key {
+            Key::Samplerate => {
+                let v = value.as_u64().ok_or_else(bad)?;
+                self.settings.samplerate_idx =
+                    SAMPLERATES.iter().position(|r| *r == v).ok_or_else(bad)?;
+            }
+            Key::CaptureRatio => {
+                let v = value.as_u64().ok_or_else(bad)?;
+                // Unknown values are ignored, as in libsigrok.
+                if let Some(i) = CAPTURE_RATIOS.iter().position(|r| *r == v) {
+                    self.settings.capture_ratio_idx = i;
+                }
+            }
+            Key::LimitSamples => self.settings.limit_samples = value.as_u64().ok_or_else(bad)?,
+            other => return Err(Error::UnknownKey(other.id().to_owned())),
+        }
+        Ok(())
+    }
+
+    fn list(&self, key: &Key, _group: Option<&str>) -> Result<ValueList> {
+        Ok(match key {
+            Key::Samplerate => ValueList::U64(SAMPLERATES.to_vec()),
+            Key::TriggerMatch => ValueList::TriggerMatches(TRIGGER_MATCHES.to_vec()),
+            Key::CaptureRatio => ValueList::U64(CAPTURE_RATIOS.to_vec()),
+            other => return Err(Error::UnknownKey(other.id().to_owned())),
+        })
+    }
+
+    fn trigger_features(&self) -> TriggerFeatures {
+        TriggerFeatures { max_stages: 1, ..TriggerFeatures::default() }
+    }
+
+    fn set_trigger(&mut self, trigger: Option<Trigger>) -> Result<()> {
+        if let Some(t) = &trigger {
+            if t.stages.len() > 1 {
+                return Err(Error::not_supported("the PICkit2 takes one trigger stage"));
+            }
+            for c in t.stages.iter().flat_map(|s| &s.conditions) {
+                if c.channel >= CHANNEL_COUNT || !TRIGGER_MATCHES.contains(&c.matches) {
+                    return Err(Error::not_supported("trigger condition"));
+                }
+            }
+        }
+        self.trigger = trigger;
+        Ok(())
+    }
+
+    fn open(&mut self) -> Result<()> {
+        if self.dev.lock().expect("dev lock").is_some() {
+            return Ok(());
+        }
+        let dev = match self.pending.take() {
+            Some(d) => d,
+            None => self.hid.as_ref().ok_or_else(|| Error::device("no device to open"))?.open()?,
+        };
+        *self.dev.lock().expect("dev lock") = Some(dev);
+        Ok(())
+    }
+
+    fn close(&mut self) -> Result<()> {
+        self.stop()?;
+        self.dev.lock().expect("dev lock").take();
+        Ok(())
+    }
+
+    fn start(&mut self, sink: PacketSink) -> Result<()> {
+        if self.worker.is_some() {
+            return Err(Error::Busy);
+        }
+        let dev = self.dev.lock().expect("dev lock").take();
+        let Some(dev) = dev else {
+            return Err(Error::device("device is not open"));
+        };
+        let mut conditions = [0u8; CHANNEL_COUNT];
+        for c in self.trigger.iter().flat_map(|t| &t.stages).flat_map(|s| &s.conditions) {
+            if !self.channels[c.channel].enabled {
+                continue;
+            }
+            conditions[c.channel] = match c.matches {
+                TriggerMatch::Zero => 1,
+                TriggerMatch::One => 2,
+                TriggerMatch::Rising => 3,
+                TriggerMatch::Falling => 4,
+                _ => 0,
+            };
+        }
+        let ratio_idx = if self.trigger.is_some() { self.settings.capture_ratio_idx } else { 0 };
+        let setup = setup_packet(conditions, ratio_idx, SAMPLERATES[self.settings.samplerate_idx]);
+        let limit = self.settings.limit_samples;
+        let slot = Arc::clone(&self.dev);
+        let stop = Arc::new(AtomicBool::new(false));
+        let stop2 = Arc::clone(&stop);
+        let handle = std::thread::Builder::new()
+            .name("microchip-pickit2 acquisition".to_owned())
+            .spawn(move || {
+                let mut dev = dev;
+                if let Err(e) = run(dev.as_mut(), &sink, &stop2, &setup, limit) {
+                    log::error!("Acquisition failed: {e}.");
+                }
+                sink.send(Packet::End);
+                *slot.lock().expect("dev lock") = Some(dev);
+            })
+            .map_err(Error::Io)?;
+        self.worker = Some((stop, handle));
+        Ok(())
+    }
+
+    fn stop(&mut self) -> Result<()> {
+        if let Some((stop, handle)) = self.worker.take() {
+            stop.store(true, Ordering::SeqCst);
+            let _ = handle.join();
+        }
+        Ok(())
+    }
+}
+
+/// One capture: SETUP, wait for the status (the trigger, or a cancel
+/// with the device's button), read the banks, send the samples.
+fn run(
+    dev: &mut dyn HidDevice,
+    sink: &PacketSink,
+    stop: &AtomicBool,
+    setup: &[u8; PACKET],
+    limit: u64,
+) -> Result<()> {
+    send(dev, setup)?;
+    sink.send(Packet::header());
+    let Some(status) = recv(dev, stop)? else {
+        log::warn!("Cannot terminate by software, need either data trigger or cancel button.");
+        return Ok(());
+    };
+    let status = u16::from_le_bytes([status[0], status[1]]);
+    if status & 0x4004 == 0x4004 {
+        log::info!("User cancelled acquisition.");
+        return Ok(());
+    }
+    let Some(raw) = retrieve(dev, stop)? else {
+        return Ok(());
+    };
+    let mut samples = convert_samples(&raw);
+    if limit > 0 && (limit as usize) < samples.len() {
+        samples.truncate(limit as usize);
+    }
+    sink.send(Packet::logic(1, samples));
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::core::session::Flow;
+    use crate::core::trigger::TriggerCondition;
+    use crate::core::{Session, TriggerStage};
+    use crate::hid::SharedFake;
+
+    /// A capture against a scripted device: the status report, then
+    /// the eight READ answers with a counter pattern.
+    #[test]
+    fn capture_through_the_session() {
+        let nibble = |k: usize| {
+            let mut n = 0u8;
+            if k & 1 != 0 {
+                n |= 0x04;
+            }
+            if k & 2 != 0 {
+                n |= 0x08;
+            }
+            if k & 4 != 0 {
+                n |= 0x01;
+            }
+            n
+        };
+        let mut raw = vec![0u8; RAW_LEN];
+        for (i, b) in raw.iter_mut().enumerate() {
+            let j = RAW_LEN - 1 - i;
+            *b = nibble(2 * j) | nibble(2 * j + 1) << 4;
+        }
+        let fake = SharedFake::default();
+        fake.push_input(&[0u8; PACKET]);
+        for chunk in raw.chunks(PACKET) {
+            fake.push_input(chunk);
+        }
+        let mut dev = Pickit2Device::with_device(Some(Box::new(fake.clone())), "04d8.0033".into());
+        dev.open().unwrap();
+        dev.set(&Key::Samplerate, &Value::U64(250_000), None).unwrap();
+        dev.set(&Key::CaptureRatio, &Value::U64(2), None).unwrap();
+        dev.set(&Key::LimitSamples, &Value::U64(12), None).unwrap();
+        let mut trigger = Trigger::default();
+        trigger.stages.push(TriggerStage {
+            conditions: vec![TriggerCondition {
+                channel: 1,
+                matches: TriggerMatch::Rising,
+                value: 0.0,
+            }],
+            ..Default::default()
+        });
+        let mut session = Session::new();
+        session.add_device(Box::new(dev));
+        session.set_trigger(Some(trigger));
+        let mut samples = Vec::new();
+        session
+            .run(|_, p| {
+                if let Packet::Logic(l) = p {
+                    samples.extend_from_slice(&l.data);
+                }
+                Flow::Continue
+            })
+            .unwrap();
+        assert_eq!(samples, (0..12u8).map(|k| k & 7).collect::<Vec<_>>());
+        let out = fake.output();
+        // SETUP: rising on pin5 (0x08), position preset 2, divider 3.
+        assert_eq!(&out[0][..10], &[0, CMD_SETUP, 1, 0x08, 0x08, 0x08, 1, 0x0a, 0x00, 3]);
+        assert_eq!(&out[1][..4], &[0, CMD_SETPOS, 0x00, SEL_BANK0]);
+        assert_eq!(out[2][1], CMD_READ);
+        assert_eq!(out.len(), 1 + 4 * 3);
+    }
+
+    #[test]
+    fn setup_and_conversion() {
+        let p = setup_packet([3, 0, 1], 1, 250_000);
+        // Rising on pin4 (enable, level and edge bits), zero on pin6.
+        assert_eq!(&p[..9], &[CMD_SETUP, 1, 0x04 | 0x10, 0x04, 0x04, 1, 0xcc, 0x03, 3]);
+        assert_eq!(p[9], CMD_PAD);
+        let p = setup_packet([0, 0, 0], 0, 1_000_000);
+        assert_eq!(&p[2..9], &[0, 0, 0, 0, 0, 0, 0]);
+        // The last raw byte holds the first two samples; the low nibble
+        // comes first.
+        let mut raw = vec![0u8; RAW_LEN];
+        raw[RAW_LEN - 1] = 0x8c | 0x01; // low: pin4+pin5+pin6, high: pin5
+        let s = convert_samples(&raw);
+        assert_eq!(s.len(), SAMPLE_COUNT);
+        assert_eq!(s[0], 0x07);
+        assert_eq!(s[1], 0x02);
+        assert_eq!(s[2], 0);
+    }
+}

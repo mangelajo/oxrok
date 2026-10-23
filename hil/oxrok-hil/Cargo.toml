@@ -1,0 +1,18 @@
+[package]
+name = "oxrok-hil"
+description = "Hardware in the loop checks for oxrok drivers, driven by the ESP32 signal generator"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+publish = false
+
+[dependencies]
+oxrok = { workspace = true, features = ["nusb"] }
+log.workspace = true
+serialport = { version = "4", default-features = false }
+
+[lints]
+workspace = true

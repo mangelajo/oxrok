@@ -22,7 +22,7 @@ from that document.
 ## Adding a driver
 
 See `docs/DRIVER_PORTING.md` once it exists (written from the first two
-ports). Until then: implement `Driver` and `Device` from `oxrok-core`,
+ports). Until then: implement `Driver` and `Device` from `oxrok::core`,
 keep the acquisition on the device's own thread, send packets through the
 `PacketSink`, and add a replay fixture so the driver is tested without
 the hardware.

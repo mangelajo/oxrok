@@ -99,9 +99,9 @@ Some cables are USB HID devices rather than serial ports: the Brymen
 BU-86X infrared adapter (`brymen-bm52x`, `brymen-bm82x`,
 `brymen-bm86x`), the Victor 70C and 86C cable (`victor-dmm`), and the
 WCH CH9325 and Silicon Labs CP2110 UART bridges that other meters'
-cables use. `oxrok-hid` talks to them through `async-hid` (IOHIDManager
+cables use. the `hid` module talks to them through `async-hid` (IOHIDManager
 on macOS, hidraw on Linux, Win32 HID on Windows, no C code), and
-`oxrok-serial` wraps each chip's report framing as a port, so the
+the `serial` module wraps each chip's report framing as a port, so the
 meter drivers see a byte stream as with a serial cable. The port name
 follows sigrok:
 
@@ -205,7 +205,7 @@ The `rigol-ds` driver covers the same 61 models as libsigrok's: Rigol
 VS5000, DS1000 (DS1052E, DS1102E, DS1152E and the D variants with the
 logic pod), DS2000 and DS2000A/MSO2000A, DS1000Z and MSO1000Z, DS4000,
 MSO5000, and the Agilent DSO1000A/B and MSO7034A. It speaks SCPI over
-`oxrok-scpi`, which carries USBTMC (the USB port on the scope), raw TCP,
+the `scpi` module, which carries USBTMC (the USB port on the scope), raw TCP,
 Rigol's length prefixed TCP and serial ports:
 
 ```
@@ -282,7 +282,7 @@ The `rigol-ds` driver covers the same 61 models as libsigrok's: Rigol
 VS5000, DS1000 (DS1052E, DS1102E, DS1152E and the D variants with the
 logic pod), DS2000 and DS2000A/MSO2000A, DS1000Z and MSO1000Z, DS4000,
 MSO5000, and the Agilent DSO1000A/B and MSO7034A. It speaks SCPI over
-`oxrok-scpi`, which carries USBTMC (the USB port on the scope), raw TCP,
+the `scpi` module, which carries USBTMC (the USB port on the scope), raw TCP,
 Rigol's length prefixed TCP and serial ports:
 
 ```

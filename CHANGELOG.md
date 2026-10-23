@@ -8,6 +8,10 @@ release may change the library API.
 
 ### Changed
 
+- One crate: the 21 workspace crates are modules of `oxrok` (`core`,
+  the transports, `drivers::*`, `formats`, `decode`); the binary sits
+  behind the default `cli` feature. The bench tool stays a separate
+  unpublished crate in `hil/`.
 - License: the whole workspace is GPL-3.0-or-later, as the sigrok code
   it ports; the MIT OR Apache-2.0 dual license is gone.
 - The bits and hex outputs drop a trigger marker that falls in the last,

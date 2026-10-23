@@ -1,0 +1,449 @@
+// Counterpart in sigrok:
+//   libsigrok/src/serial_hid.c,
+//   libsigrok/src/serial_hid_bu86x.c,
+//   libsigrok/src/serial_hid_ch9325.c,
+//   libsigrok/src/serial_hid_cp2110.c,
+//   libsigrok/src/serial_hid_victor.c,
+//   Copyright (C) 2017-2019 Gerhard Sittig <gerhard.sittig@gmx.net>
+//   (libsigrok libsigrok-unreleased-1855-g20baa77f).
+// This file is a port of the sigrok counterpart, GPL-3.0-or-later like
+//   it.
+
+//! Serial over USB HID: the cables that carry a meter's byte stream in
+//! HID reports. Each chip frames the bytes its own way; this module
+//! turns a [`HidDevice`] into a [`Port`] so a driver does not care.
+//!
+//! The port name follows sigrok: `hid`, `hid/CHIP` or
+//! `hid[/CHIP]/sn=SERIAL`, where CHIP is one of `bu86x`, `ch9325`,
+//! `cp2110` and `victor`. Without a chip any cable with a known USB id
+//! is taken; without a serial number the first match is.
+
+use crate::core::{Error, Result};
+use crate::hid::HidDevice;
+use crate::serial::{Flow, Params, Parity, Port};
+use std::collections::VecDeque;
+use std::time::Duration;
+
+/// A serial over HID chip.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Chip {
+    /// Brymen BU-86X infrared adapter: a bare byte stream in 8 byte
+    /// reports, fixed line parameters.
+    Bu86x,
+    /// WCH CH9325 (and Hoitek HE2325U): 7 bytes per report behind a
+    /// count byte, line parameters set with a feature report.
+    Ch9325,
+    /// Silicon Labs CP2110: 63 bytes per report behind a count byte,
+    /// a full UART behind feature reports.
+    Cp2110,
+    /// Victor 70C/86C cable: 14 byte reports, scrambled.
+    Victor,
+}
+
+impl Chip {
+    /// All chips.
+    pub const ALL: [Chip; 4] = [Chip::Bu86x, Chip::Ch9325, Chip::Cp2110, Chip::Victor];
+
+    /// The name used in port names.
+    pub fn name(self) -> &'static str {
+        match self {
+            Chip::Bu86x => "bu86x",
+            Chip::Ch9325 => "ch9325",
+            Chip::Cp2110 => "cp2110",
+            Chip::Victor => "victor",
+        }
+    }
+
+    /// The chip with this name.
+    pub fn from_name(name: &str) -> Option<Chip> {
+        Chip::ALL.into_iter().find(|c| c.name() == name)
+    }
+
+    /// The USB ids the chip is known under.
+    pub fn usb_ids(self) -> &'static [(u16, u16)] {
+        match self {
+            Chip::Bu86x => &[(0x0820, 0x0001)],
+            Chip::Ch9325 => &[(0x1a86, 0xe008), (0x04fa, 0x2490)],
+            Chip::Cp2110 => &[(0x10c4, 0xea80)],
+            Chip::Victor => &[(0x1244, 0xd237)],
+        }
+    }
+
+    /// The chip behind a USB id.
+    pub fn for_usb_id(vid: u16, pid: u16) -> Option<Chip> {
+        Chip::ALL.into_iter().find(|c| c.usb_ids().contains(&(vid, pid)))
+    }
+
+    /// Payload bytes per report.
+    fn chunk(self) -> usize {
+        match self {
+            Chip::Bu86x => 8,
+            Chip::Ch9325 => 7,
+            Chip::Cp2110 => 63,
+            Chip::Victor => 14,
+        }
+    }
+}
+
+/// A parsed `hid[/CHIP][/sn=SERIAL]` port name.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Spec {
+    /// The chip, when named.
+    pub chip: Option<Chip>,
+    /// The serial number, when given.
+    pub serial: Option<String>,
+}
+
+impl Spec {
+    /// Parses a port name. `None` when it is not a HID name at all.
+    pub fn parse(name: &str) -> Option<Result<Spec>> {
+        let rest = name.strip_prefix("hid")?;
+        if !rest.is_empty() && !rest.starts_with('/') {
+            return None;
+        }
+        let mut spec = Spec::default();
+        for field in rest.split('/').filter(|f| !f.is_empty()) {
+            if let Some(sn) = field.strip_prefix("sn=") {
+                spec.serial = Some(sn.to_owned());
+            } else if let Some(chip) = Chip::from_name(field) {
+                if spec.chip.is_some() {
+                    return Some(Err(Error::Arg(format!("Invalid HID port name '{name}'."))));
+                }
+                spec.chip = Some(chip);
+            } else {
+                return Some(Err(Error::Arg(format!("Invalid HID port name '{name}'."))));
+            }
+        }
+        Some(Ok(spec))
+    }
+}
+
+/// True when `name` names a HID port.
+pub fn is_hid_name(name: &str) -> bool {
+    Spec::parse(name).is_some()
+}
+
+/// Opens the cable `name` describes.
+pub fn open(name: &str, params: Params) -> Result<Box<dyn Port>> {
+    let spec =
+        Spec::parse(name).ok_or_else(|| Error::Arg(format!("Not a HID port: '{name}'.")))??;
+    let devices = crate::hid::list()?;
+    let found = devices.iter().find_map(|d| {
+        let chip = Chip::for_usb_id(d.vendor_id, d.product_id)?;
+        if spec.chip.is_some_and(|c| c != chip) {
+            return None;
+        }
+        if let Some(sn) = &spec.serial
+            && d.serial.as_deref() != Some(sn.as_str())
+        {
+            return None;
+        }
+        Some((chip, d))
+    });
+    let Some((chip, info)) = found else {
+        return Err(Error::device(format!("No HID cable matches '{name}'.")));
+    };
+    let full = match &info.serial {
+        Some(sn) if !sn.is_empty() => format!("hid/{}/sn={sn}", chip.name()),
+        _ => format!("hid/{}", chip.name()),
+    };
+    log::info!("Opening {full} ({:04x}:{:04x}).", info.vendor_id, info.product_id);
+    let dev = info.open()?;
+    let mut port = HidPort::new(chip, dev, full);
+    port.set_params(params)?;
+    Ok(Box::new(port))
+}
+
+/// A [`Port`] over a serial over HID cable.
+pub struct HidPort {
+    name: String,
+    chip: Chip,
+    dev: Box<dyn HidDevice>,
+    rx: VecDeque<u8>,
+    data_bits: u8,
+}
+
+impl HidPort {
+    /// A port on an open device of `chip`, named `name`.
+    pub fn new(chip: Chip, dev: Box<dyn HidDevice>, name: String) -> HidPort {
+        HidPort { name, chip, dev, rx: VecDeque::new(), data_bits: 8 }
+    }
+
+    /// Reads one report and queues the bytes it carries. Returns how
+    /// many were queued; 0 on a timeout or an empty report.
+    fn fill(&mut self, timeout: Duration) -> Result<usize> {
+        let mut report = [0u8; crate::hid::MAX_REPORT];
+        let n = self.dev.read_report(&mut report, timeout)?;
+        if n == 0 {
+            return Ok(0);
+        }
+        let bytes = decode(self.chip, &report[..n])?;
+        let mask =
+            if self.data_bits.is_multiple_of(8) { 0xff } else { (1u8 << self.data_bits) - 1 };
+        self.rx.extend(bytes.iter().map(|b| b & mask));
+        Ok(bytes.len())
+    }
+}
+
+/// The payload bytes of one input report of `chip`.
+fn decode(chip: Chip, report: &[u8]) -> Result<Vec<u8>> {
+    Ok(match chip {
+        Chip::Bu86x => report.to_vec(),
+        Chip::Ch9325 => {
+            let count = report[0];
+            if count & 0xf0 != 0xf0 || usize::from(count & 0x0f) + 1 > report.len() {
+                return Err(Error::device(format!("ch9325: bad report header {count:#04x}")));
+            }
+            report[1..=usize::from(count & 0x0f)].to_vec()
+        }
+        Chip::Cp2110 => {
+            let count = usize::from(report[0]);
+            if count == 0 {
+                return Ok(Vec::new());
+            }
+            if count > 63 || count + 1 > report.len() {
+                return Err(Error::device(format!("cp2110: bad report header {count}")));
+            }
+            report[1..=count].to_vec()
+        }
+        Chip::Victor => victor_unscramble(report),
+    })
+}
+
+/// Undoes the Victor cable's scrambling: bytes are shuffled, offset by
+/// a fixed pattern and bit reversed. Anything that is not a 14 byte
+/// report passes through; an all zero report is dropped.
+pub fn victor_unscramble(report: &[u8]) -> Vec<u8> {
+    const OFFSETS: [u8; 14] = *b"jodenxunickxia";
+    const SHUFFLE: [usize; 14] = [6, 13, 5, 11, 2, 7, 9, 8, 3, 10, 12, 0, 4, 1];
+    if report.len() != 14 {
+        return report.to_vec();
+    }
+    if report.iter().all(|b| *b == 0) {
+        return Vec::new();
+    }
+    let mut out = [0u8; 14];
+    for (i, b) in report.iter().enumerate() {
+        out[13 - SHUFFLE[i]] = b.wrapping_sub(OFFSETS[i]).reverse_bits();
+    }
+    out.to_vec()
+}
+
+impl Port for HidPort {
+    fn name(&self) -> &str {
+        &self.name
+    }
+
+    fn set_params(&mut self, p: Params) -> Result<()> {
+        self.data_bits = p.data_bits;
+        match self.chip {
+            Chip::Bu86x | Chip::Victor => Ok(()),
+            Chip::Ch9325 => {
+                let [lo, hi] = (p.baud as u16).to_le_bytes();
+                self.dev.set_feature(&[0, lo, hi, 0, 0, p.data_bits - 5])
+            }
+            Chip::Cp2110 => {
+                if !(300..=1_000_000).contains(&p.baud) {
+                    return Err(Error::Arg(format!("cp2110: baud rate {} out of range.", p.baud)));
+                }
+                let parity = match p.parity {
+                    Parity::None => 0,
+                    Parity::Even => 1,
+                    Parity::Odd => 2,
+                };
+                let flow = match p.flow {
+                    Flow::None => 0,
+                    Flow::RtsCts => 1,
+                    Flow::XonXoff => {
+                        return Err(Error::Arg("cp2110: no XON/XOFF flow control.".to_owned()));
+                    }
+                };
+                self.dev.set_feature(&[0x41, 1])?;
+                let [b3, b2, b1, b0] = p.baud.to_be_bytes();
+                self.dev.set_feature(&[
+                    0x50,
+                    b3,
+                    b2,
+                    b1,
+                    b0,
+                    parity,
+                    flow,
+                    p.data_bits - 5,
+                    u8::from(p.stop_bits == 2),
+                ])
+            }
+        }
+    }
+
+    fn set_handshake(&mut self, _rts: Option<bool>, _dtr: Option<bool>) -> Result<()> {
+        Ok(())
+    }
+
+    fn read(&mut self, buf: &mut [u8], timeout: Duration) -> Result<usize> {
+        if self.rx.is_empty() {
+            let deadline = std::time::Instant::now() + timeout;
+            loop {
+                let left = deadline.saturating_duration_since(std::time::Instant::now());
+                if left.is_zero() {
+                    return Ok(0);
+                }
+                if self.fill(left)? > 0 {
+                    break;
+                }
+            }
+        }
+        let n = buf.len().min(self.rx.len());
+        for b in &mut buf[..n] {
+            *b = self.rx.pop_front().expect("queued byte");
+        }
+        Ok(n)
+    }
+
+    fn write(&mut self, data: &[u8]) -> Result<()> {
+        for chunk in data.chunks(self.chip.chunk()) {
+            match self.chip {
+                Chip::Bu86x => self.dev.write_report(chunk)?,
+                Chip::Ch9325 => {
+                    let mut report = [0u8; 8];
+                    report[0] = chunk.len() as u8;
+                    report[1..=chunk.len()].copy_from_slice(chunk);
+                    self.dev.write_report(&report)?;
+                }
+                Chip::Cp2110 => {
+                    let mut report = [0u8; 64];
+                    report[0] = chunk.len() as u8;
+                    report[1..=chunk.len()].copy_from_slice(chunk);
+                    self.dev.write_report(&report)?;
+                }
+                Chip::Victor => {}
+            }
+        }
+        Ok(())
+    }
+
+    fn purge(&mut self) -> Result<()> {
+        self.rx.clear();
+        if self.chip == Chip::Cp2110 {
+            self.dev.write_report(&[0x43, 0x03])?;
+        }
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::hid::SharedFake;
+
+    const T: Duration = Duration::from_millis(10);
+
+    fn port(chip: Chip, input: &[&[u8]]) -> (HidPort, SharedFake) {
+        let fake = SharedFake::default();
+        for r in input {
+            fake.push_input(r);
+        }
+        (HidPort::new(chip, Box::new(fake.clone()), "hid".to_owned()), fake)
+    }
+
+    #[test]
+    fn parses_names() {
+        assert_eq!(Spec::parse("hid").unwrap().unwrap(), Spec::default());
+        assert_eq!(
+            Spec::parse("hid/bu86x").unwrap().unwrap(),
+            Spec { chip: Some(Chip::Bu86x), serial: None }
+        );
+        assert_eq!(
+            Spec::parse("hid/ch9325/sn=AB12").unwrap().unwrap(),
+            Spec { chip: Some(Chip::Ch9325), serial: Some("AB12".to_owned()) }
+        );
+        assert_eq!(
+            Spec::parse("hid/sn=X").unwrap().unwrap(),
+            Spec { chip: None, serial: Some("X".to_owned()) }
+        );
+        assert!(Spec::parse("/dev/ttyUSB0").is_none());
+        assert!(Spec::parse("hidden").is_none());
+        assert!(Spec::parse("hid/nochip").unwrap().is_err());
+        assert!(Spec::parse("hid/bu86x/victor").unwrap().is_err());
+        assert_eq!(Chip::for_usb_id(0x04fa, 0x2490), Some(Chip::Ch9325));
+    }
+
+    #[test]
+    fn bu86x_is_a_bare_stream() {
+        let (mut p, fake) = port(Chip::Bu86x, &[&[1, 2, 3, 4, 5, 6, 7, 8], &[9, 10]]);
+        let mut buf = [0u8; 5];
+        assert_eq!(p.read(&mut buf, T).unwrap(), 5);
+        assert_eq!(buf, [1, 2, 3, 4, 5]);
+        let mut buf = [0u8; 16];
+        assert_eq!(p.read(&mut buf, T).unwrap(), 3);
+        assert_eq!(p.read(&mut buf, T).unwrap(), 2);
+        assert_eq!(&buf[..2], &[9, 10]);
+        p.write(&[0x00, 0x00, 0x52, 0x66]).unwrap();
+        assert_eq!(fake.output(), vec![vec![0x00, 0x00, 0x52, 0x66]]);
+    }
+
+    #[test]
+    fn ch9325_frames_and_params() {
+        let (mut p, fake) = port(Chip::Ch9325, &[&[0xf3, b'a', b'b', b'c', 0, 0, 0, 0]]);
+        p.set_params(Params::parse("2400/7o1").unwrap()).unwrap();
+        assert_eq!(fake.features(), vec![vec![0, 0x60, 0x09, 0, 0, 2]]);
+        let mut buf = [0u8; 8];
+        assert_eq!(p.read(&mut buf, T).unwrap(), 3);
+        assert_eq!(&buf[..3], b"abc");
+        p.write(b"0123456789").unwrap();
+        let out = fake.output();
+        assert_eq!(out.len(), 2);
+        assert_eq!(out[0], [7, b'0', b'1', b'2', b'3', b'4', b'5', b'6']);
+        assert_eq!(out[1], [3, b'7', b'8', b'9', 0, 0, 0, 0]);
+        // The 7 bit mask applies to the queued bytes.
+        let (mut q, _) = port(Chip::Ch9325, &[&[0xf1, 0xc1]]);
+        q.set_params(Params::parse("2400/7o1").unwrap()).unwrap();
+        assert_eq!(q.read(&mut buf, T).unwrap(), 1);
+        assert_eq!(buf[0], 0x41);
+        let (mut bad, _) = port(Chip::Ch9325, &[&[0x00]]);
+        assert!(bad.read(&mut buf, T).is_err());
+    }
+
+    #[test]
+    fn cp2110_frames_params_and_purge() {
+        let (mut p, fake) = port(Chip::Cp2110, &[&[2, b'o', b'k'], &[0], &[]]);
+        p.set_params(Params::parse("115200/8n2/flow=1").unwrap()).unwrap();
+        let f = fake.features();
+        assert_eq!(f[0], [0x41, 1]);
+        assert_eq!(f[1], [0x50, 0, 1, 0xc2, 0, 0, 1, 3, 1]);
+        let mut buf = [0u8; 8];
+        assert_eq!(p.read(&mut buf, T).unwrap(), 2);
+        assert_eq!(&buf[..2], b"ok");
+        // An empty report and then a timeout: nothing.
+        assert_eq!(p.read(&mut buf, T).unwrap(), 0);
+        p.write(b"D").unwrap();
+        p.purge().unwrap();
+        let out = fake.output();
+        assert_eq!(out[0][..2], [1, b'D']);
+        assert_eq!(out[0].len(), 64);
+        assert_eq!(out[1], [0x43, 0x03]);
+        assert!(p.set_params(Params::parse("110/8n1").unwrap()).is_err());
+        assert!(p.set_params(Params::parse("9600/8n1/flow=2").unwrap()).is_err());
+    }
+
+    #[test]
+    fn victor_unscrambles() {
+        // Scramble a packet the way the cable does and check it comes
+        // back.
+        const OFFSETS: [u8; 14] = *b"jodenxunickxia";
+        const SHUFFLE: [usize; 14] = [6, 13, 5, 11, 2, 7, 9, 8, 3, 10, 12, 0, 4, 1];
+        let plain: [u8; 14] = *b"+1234 5\x31\x00\x00\x00\x00\r\n";
+        let mut wire = [0u8; 14];
+        for i in 0..14 {
+            wire[i] = plain[13 - SHUFFLE[i]].reverse_bits().wrapping_add(OFFSETS[i]);
+        }
+        assert_eq!(victor_unscramble(&wire), plain.to_vec());
+        assert!(victor_unscramble(&[0u8; 14]).is_empty());
+        assert_eq!(victor_unscramble(&[1, 2]), vec![1, 2]);
+        let (mut p, fake) = port(Chip::Victor, &[&wire]);
+        let mut buf = [0u8; 14];
+        assert_eq!(p.read(&mut buf, T).unwrap(), 14);
+        assert_eq!(buf, plain);
+        p.write(b"ignored").unwrap();
+        assert!(fake.output().is_empty());
+    }
+}

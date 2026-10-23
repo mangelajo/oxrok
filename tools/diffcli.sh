@@ -135,14 +135,14 @@ case_ "binary input" -- -i "$TMP/raw.bin" -I binary:numchannels=8 -O hex
 case_ "file show" --keep-header -- -i "$TMP/sr.sr" --show
 
 # Protocol decoders on a synthetic UART capture.
-UART="$(dirname "$0")/../crates/cli/tests/fixtures/uart-hi.vcd"
+UART="$(dirname "$0")/../tests/fixtures/uart-hi.vcd"
 case_ "uart all annotations verbose" --keep-header -- -l 4 -i "$UART" -P uart:baudrate=115200
 case_ "uart rx-data" --keep-header -- -i "$UART" -P uart -A uart=rx-data
 case_ "uart ascii start and data" --keep-header -- -i "$UART" -P uart:format=ascii -A uart=rx-data:rx-start
 case_ "uart samplenum" --keep-header -- -i "$UART" -P uart -A uart=rx-data --protocol-decoder-samplenum
 case_ "uart binary" --keep-header -- -i "$UART" -P uart -B uart=rx
-I2C="$(dirname "$0")/../crates/cli/tests/fixtures/i2c-write-read.vcd"
-SPI="$(dirname "$0")/../crates/cli/tests/fixtures/spi-mode0.vcd"
+I2C="$(dirname "$0")/../tests/fixtures/i2c-write-read.vcd"
+SPI="$(dirname "$0")/../tests/fixtures/spi-mode0.vcd"
 case_ "i2c all annotations verbose" --keep-header -- -l 4 -i "$I2C" -P i2c
 case_ "i2c unshifted addresses" --keep-header -- -i "$I2C" -P i2c:address_format=unshifted -A i2c=address-write:address-read
 case_ "i2c meta" --keep-header -- -i "$I2C" -P i2c -M i2c
@@ -151,9 +151,9 @@ case_ "spi all annotations verbose" --keep-header -- -l 4 -i "$SPI" -P spi
 case_ "spi lsb first nibbles" --keep-header -- -i "$SPI" -P spi:bitorder=lsb-first:wordsize=4 -A spi=mosi-data
 case_ "spi transfers" --keep-header -- -i "$SPI" -P spi -A spi=mosi-transfer:miso-transfer
 case_ "spi binary" --keep-header -- -i "$SPI" -P spi -B spi=miso
-UARTSR="$(dirname "$0")/../crates/cli/tests/fixtures/uart-esp32.sr"
-SPISR="$(dirname "$0")/../crates/cli/tests/fixtures/spi-esp32.sr"
-I2CSR="$(dirname "$0")/../crates/cli/tests/fixtures/i2c-esp32.sr"
+UARTSR="$(dirname "$0")/../tests/fixtures/uart-esp32.sr"
+SPISR="$(dirname "$0")/../tests/fixtures/spi-esp32.sr"
+I2CSR="$(dirname "$0")/../tests/fixtures/i2c-esp32.sr"
 case_ "uart real capture" --keep-header -- -l 4 -i "$UARTSR" -P uart:baudrate=921600:rx=D21
 case_ "i2c real capture" --keep-header -- -l 4 -i "$I2CSR" -P i2c:scl=D11:sda=D12
 case_ "spi real capture" --keep-header -- -l 4 -i "$SPISR" -P spi:clk=D28:miso=D26:mosi=D5:cs=D25

@@ -1,6 +1,6 @@
 # Intronix LogicPort LA1034
 
-Driver: `intronix-logicport`, crate `oxrok-driver-logicport`. 34 channels
+Driver: `intronix-logicport`, module `drivers::logicport`. 34 channels
 (D0-D31, CLK1, CLK2), 2048 sample entries, 1 kHz to 500 MHz timing mode,
 state mode on CLK1 or CLK2 with a qualifier and a selectable sample
 point, run length compression up to 200 MHz, two hardware trigger levels

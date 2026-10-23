@@ -1,29 +1,60 @@
+[package]
+name = "oxrok"
+description = "A sigrok compatible logic analyzer, multimeter and oscilloscope stack in Rust: library and command line tool"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+keywords = ["sigrok", "logic-analyzer", "oscilloscope", "multimeter"]
+categories = ["hardware-support", "command-line-utilities"]
+exclude = ["hil/", "tools/", "docs/"]
+
+[lib]
+name = "oxrok"
+path = "src/lib.rs"
+
+[[bin]]
+name = "oxrok"
+path = "src/main.rs"
+required-features = ["cli"]
+
+[features]
+default = ["cli", "nusb"]
+# The command line tool.
+cli = ["dep:clap", "dep:ctrlc"]
+# Pure Rust USB backend (Linux, macOS, Windows, Android).
+nusb = ["dep:nusb"]
+# libusb backend, for the BSDs and as a fallback; builds libusb from
+# source. OXROK_USB_BACKEND=libusb selects it at run time.
+libusb = ["dep:rusb"]
+# Run libsigrokdecode's Python decoders through the system Python.
+python = ["dep:pyo3"]
+
+[dependencies]
+log.workspace = true
+thiserror.workspace = true
+clap = { workspace = true, optional = true }
+ctrlc = { version = "3", optional = true }
+zip = { version = "9.0.5", default-features = false, features = ["deflate-flate2"] }
+chrono = { version = "0.4.45", default-features = false, features = ["clock", "std"] }
+flate2 = { version = "1.1.10", default-features = false, features = ["rust_backend"] }
+sha2 = "0.10"
+nusb = { version = "0.2.8", optional = true }
+rusb = { version = "0.9.4", optional = true, features = ["vendored"] }
+serialport = { version = "4", default-features = false }
+async-hid = { version = "0.5", default-features = false, features = ["async-io", "win32"] }
+async-io = "2"
+futures-lite = "2"
+pyo3 = { version = "0.30", features = ["auto-initialize"], optional = true }
+
+[lints]
+workspace = true
+
 [workspace]
 resolver = "3"
-members = [
-    "crates/core",
-    "crates/formats",
-    "crates/usb",
-    "crates/serial",
-    "crates/hid",
-    "crates/scpi",
-    "crates/ftdi",
-    "crates/ezusb",
-    "crates/drivers/demo",
-    "crates/drivers/logicport",
-    "crates/drivers/fx2lafw",
-    "crates/drivers/serial-dmm",
-    "crates/drivers/rigol-ds",
-    "crates/drivers/raspberrypi-pico",
-    "crates/drivers/dcttech-usbrelay",
-    "crates/drivers/microchip-pickit2",
-    "crates/dmm",
-    "crates/decode",
-    "crates/decoders",
-    "crates/pydecode",
-    "crates/cli",
-    "crates/hil",
-]
+members = ["hil/oxrok-hil"]
 
 [workspace.package]
 version = "0.1.0"
@@ -34,26 +65,7 @@ repository = "https://github.com/mangelajo/oxrok"
 authors = ["Miguel Angel Ajo <mangel.ajo@gmail.com>"]
 
 [workspace.dependencies]
-oxrok-core = { path = "crates/core", version = "0.1.0" }
-oxrok-formats = { path = "crates/formats", version = "0.1.0" }
-oxrok-usb = { path = "crates/usb", version = "0.1.0", default-features = false }
-oxrok-ftdi = { path = "crates/ftdi", version = "0.1.0" }
-oxrok-serial = { path = "crates/serial", version = "0.1.0" }
-oxrok-hid = { path = "crates/hid", version = "0.1.0" }
-oxrok-scpi = { path = "crates/scpi", version = "0.1.0" }
-oxrok-dmm = { path = "crates/dmm", version = "0.1.0" }
-oxrok-driver-serial-dmm = { path = "crates/drivers/serial-dmm", version = "0.1.0" }
-oxrok-driver-rigol-ds = { path = "crates/drivers/rigol-ds", version = "0.1.0" }
-oxrok-driver-raspberrypi-pico = { path = "crates/drivers/raspberrypi-pico", version = "0.1.0" }
-oxrok-driver-dcttech-usbrelay = { path = "crates/drivers/dcttech-usbrelay", version = "0.1.0" }
-oxrok-driver-microchip-pickit2 = { path = "crates/drivers/microchip-pickit2", version = "0.1.0" }
-oxrok-ezusb = { path = "crates/ezusb", version = "0.1.0" }
-oxrok-driver-demo = { path = "crates/drivers/demo", version = "0.1.0" }
-oxrok-driver-logicport = { path = "crates/drivers/logicport", version = "0.1.0" }
-oxrok-driver-fx2lafw = { path = "crates/drivers/fx2lafw", version = "0.1.0" }
-oxrok-decode = { path = "crates/decode", version = "0.1.0" }
-oxrok-decoders = { path = "crates/decoders", version = "0.1.0" }
-oxrok-pydecode = { path = "crates/pydecode", version = "0.1.0" }
+oxrok = { path = ".", version = "0.1.0", default-features = false }
 log = "0.4"
 thiserror = "2"
 clap = { version = "4", features = ["derive"] }

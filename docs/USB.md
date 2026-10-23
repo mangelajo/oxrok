@@ -13,7 +13,7 @@ cargo feature. The drivers never see which one is in use.
 With both compiled in, `OXROK_USB_BACKEND=libusb` or `=nusb` picks one
 at run time; nusb is the default.
 
-`cargo run -p oxrok-usb --example list` prints what the backend sees.
+`cargo run --example usb_list` prints what the backend sees.
 
 ## Verified
 
@@ -94,7 +94,7 @@ let ftdi = Ftdi::open(Box::new(recorder), Port::A)?;
 std::fs::write("session.txt", handle.fixture().to_text())?;
 ```
 
-`cargo run -p oxrok-ftdi --example probe -- [conn] [--record FILE]`
+`cargo run --example ftdi_probe -- [conn] [--record FILE]`
 does this for the FTDI layer: it runs every request that drives no pin
 and writes the fixture.
 

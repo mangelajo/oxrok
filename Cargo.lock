@@ -711,170 +711,21 @@ checksum = "384b8ab6d37215f3c5301a95a4accb5d64aa607f1fcb26a11b5303878451b4fe"
 name = "oxrok"
 version = "0.1.0"
 dependencies = [
- "clap",
- "ctrlc",
- "log",
- "oxrok-core",
- "oxrok-decode",
- "oxrok-decoders",
- "oxrok-driver-dcttech-usbrelay",
- "oxrok-driver-demo",
- "oxrok-driver-fx2lafw",
- "oxrok-driver-logicport",
- "oxrok-driver-microchip-pickit2",
- "oxrok-driver-raspberrypi-pico",
- "oxrok-driver-rigol-ds",
- "oxrok-driver-serial-dmm",
- "oxrok-formats",
- "oxrok-pydecode",
- "oxrok-usb",
-]
-
-[[package]]
-name = "oxrok-core"
-version = "0.1.0"
-dependencies = [
- "log",
- "thiserror",
-]
-
-[[package]]
-name = "oxrok-decode"
-version = "0.1.0"
-dependencies = [
- "log",
- "oxrok-core",
-]
-
-[[package]]
-name = "oxrok-decoders"
-version = "0.1.0"
-dependencies = [
- "log",
- "oxrok-core",
- "oxrok-decode",
-]
-
-[[package]]
-name = "oxrok-dmm"
-version = "0.1.0"
-dependencies = [
- "log",
- "oxrok-core",
-]
-
-[[package]]
-name = "oxrok-driver-dcttech-usbrelay"
-version = "0.1.0"
-dependencies = [
- "log",
- "oxrok-core",
- "oxrok-hid",
-]
-
-[[package]]
-name = "oxrok-driver-demo"
-version = "0.1.0"
-dependencies = [
- "log",
- "oxrok-core",
-]
-
-[[package]]
-name = "oxrok-driver-fx2lafw"
-version = "0.1.0"
-dependencies = [
- "log",
- "oxrok-core",
- "oxrok-ezusb",
- "oxrok-usb",
-]
-
-[[package]]
-name = "oxrok-driver-logicport"
-version = "0.1.0"
-dependencies = [
- "log",
- "oxrok-core",
- "oxrok-ftdi",
- "oxrok-usb",
-]
-
-[[package]]
-name = "oxrok-driver-microchip-pickit2"
-version = "0.1.0"
-dependencies = [
- "log",
- "oxrok-core",
- "oxrok-hid",
-]
-
-[[package]]
-name = "oxrok-driver-raspberrypi-pico"
-version = "0.1.0"
-dependencies = [
- "log",
- "oxrok-core",
- "oxrok-serial",
-]
-
-[[package]]
-name = "oxrok-driver-rigol-ds"
-version = "0.1.0"
-dependencies = [
- "log",
- "oxrok-core",
- "oxrok-scpi",
-]
-
-[[package]]
-name = "oxrok-driver-serial-dmm"
-version = "0.1.0"
-dependencies = [
- "log",
- "oxrok-core",
- "oxrok-dmm",
- "oxrok-serial",
-]
-
-[[package]]
-name = "oxrok-ezusb"
-version = "0.1.0"
-dependencies = [
- "log",
- "oxrok-core",
- "oxrok-usb",
-]
-
-[[package]]
-name = "oxrok-formats"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "flate2",
- "log",
- "oxrok-core",
- "zip",
-]
-
-[[package]]
-name = "oxrok-ftdi"
-version = "0.1.0"
-dependencies = [
- "log",
- "oxrok-core",
- "oxrok-usb",
-]
-
-[[package]]
-name = "oxrok-hid"
-version = "0.1.0"
-dependencies = [
  "async-hid",
  "async-io",
+ "chrono",
+ "clap",
+ "ctrlc",
+ "flate2",
  "futures-lite",
  "log",
- "oxrok-core",
+ "nusb",
+ "pyo3",
+ "rusb",
+ "serialport",
+ "sha2",
+ "thiserror",
+ "zip",
 ]
 
 [[package]]
@@ -882,51 +733,8 @@ name = "oxrok-hil"
 version = "0.1.0"
 dependencies = [
  "log",
- "oxrok-core",
- "oxrok-driver-logicport",
- "oxrok-usb",
+ "oxrok",
  "serialport",
-]
-
-[[package]]
-name = "oxrok-pydecode"
-version = "0.1.0"
-dependencies = [
- "log",
- "oxrok-core",
- "oxrok-decode",
- "pyo3",
-]
-
-[[package]]
-name = "oxrok-scpi"
-version = "0.1.0"
-dependencies = [
- "log",
- "oxrok-core",
- "oxrok-serial",
- "oxrok-usb",
-]
-
-[[package]]
-name = "oxrok-serial"
-version = "0.1.0"
-dependencies = [
- "log",
- "oxrok-core",
- "oxrok-hid",
- "serialport",
-]
-
-[[package]]
-name = "oxrok-usb"
-version = "0.1.0"
-dependencies = [
- "log",
- "nusb",
- "oxrok-core",
- "rusb",
- "sha2",
 ]
 
 [[package]]

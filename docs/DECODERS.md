@@ -1,6 +1,6 @@
 # Protocol decoders
 
-`oxrok-decode` is the runtime, `oxrok-decoders` the native decoders.
+`oxrok::decode` is the runtime, `oxrok::decoders` the native decoders.
 The command line flags are sigrok-cli's: `-P uart:baudrate=9600:rx=D0`
 runs a decoder, `-A uart=rx-data:rx-start` selects annotation classes
 or rows, `-B uart=rx` writes a binary class to stdout, `-M` shows
@@ -42,7 +42,7 @@ checked against the allowed values.
 
 `uart`, `i2c` and `spi` reproduce libsigrokdecode's annotation classes,
 rows, texts, sample ranges, binary output and metadata;
-`crates/cli/tests/decode_cli.rs` compares their output with sigrok-cli's
+`tests/decode_cli.rs` compares their output with sigrok-cli's
 byte for byte on synthetic captures, and `tools/diffcli.sh` repeats the
 comparison in every output mode. Two details to know: `uart` keeps an
 upstream quirk that selections depend on (stop bits are tagged with the
@@ -55,14 +55,14 @@ and is written from the protocol and the decoder's documented output.
 
 ## Python decoders
 
-With the `python` cargo feature (`cargo install --path crates/cli
+With the `python` cargo feature (`cargo install --path .
 --features python`) oxrok runs the unchanged `pd.py` files of a
 libsigrokdecode installation. The decoders are looked for in
 `OXROK_DECODERS_DIR`, `SIGROKDECODE_DIR`, `~/.local/share/libsigrokdecode/decoders`
 and the system directories. Native decoders take precedence over a
 Python decoder of the same id.
 
-`oxrok-pydecode` provides the `sigrokdecode` module the decoders
+`oxrok::pydecode` provides the `sigrokdecode` module the decoders
 import: the `Decoder` base class with `wait`, `put`, `register` and
 `has_channel`, the output constants and `SRD_CONF_SAMPLERATE`. Each
 Python decoder is a runtime `Decoder`; its `decode` runs on the
@@ -97,7 +97,7 @@ The default build has no Python dependency.
 
 ## Fixtures
 
-`crates/cli/tests/fixtures` holds the captures the conformance tests
+`tests/fixtures` holds the captures the conformance tests
 run on, each with sigrok-cli's output next to it:
 
 - `uart-hi.vcd`, `i2c-write-read.vcd`, `spi-mode0.vcd`: synthetic,
