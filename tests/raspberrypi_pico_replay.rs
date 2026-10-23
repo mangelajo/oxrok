@@ -61,7 +61,7 @@ fn four_digital_channels_compact_format() {
     // 21 digital channels pack into 3 bytes per sample.
     assert_eq!(bytes, 12 * 3);
     assert!(logic.iter().flatten().all(|b| *b == 0));
-    assert!(analog.is_empty());
+    assert_eq!(analog.len(), 0);
     assert_eq!(triggers, 1);
 }
 

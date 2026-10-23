@@ -437,6 +437,6 @@ mod tests {
         assert_eq!(r[0].mq, Mq::Continuity);
         // An unknown main mode gives no reading.
         let p = packet(25, 0, 0, mode::SUB_TIME, 0, 0, [0x10, 0], [0, 0, 0]);
-        assert!(eev121gw_parse(&p).is_empty());
+        assert_eq!(eev121gw_parse(&p).len(), 0);
     }
 }

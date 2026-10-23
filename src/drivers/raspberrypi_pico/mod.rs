@@ -1104,7 +1104,7 @@ mod tests {
         assert_eq!(out.logic, vec![5, 0, 0, 5, 0, 0, 5, 0, 0, 5, 0, 0]);
         assert_eq!(out.analog[0].len(), 4);
         assert!((out.analog[0][0] - 2.57).abs() < 1e-4);
-        assert!(out.analog[1].is_empty());
+        assert_eq!(out.analog[1].len(), 0);
         // The stop marker ends decoding.
         let mut out = Slices::default();
         let used = d.decode(&[0x81, 0x80, b'$', b'5', b'+'], &mut out);

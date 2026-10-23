@@ -572,7 +572,7 @@ mod tests {
         assert_eq!(r.len(), 1);
         assert!(r[0].flags.contains(MqFlags::DIODE | MqFlags::DC));
         // No function bits at all: nothing.
-        assert!(bm52x_parse(&bm52x("1234", None, "    ")).is_empty());
+        assert_eq!(bm52x_parse(&bm52x("1234", None, "    ")).len(), 0);
     }
 
     #[test]
@@ -587,7 +587,7 @@ mod tests {
         assert!((r[0].value - 25.0).abs() < 1e-4);
         let mut p = bm52x("---C", None, "    ");
         p[2] |= 0x01;
-        assert!(bm52x_parse(&p).is_empty());
+        assert_eq!(bm52x_parse(&p).len(), 0);
     }
 
     /// The BM86x segment byte of a character.

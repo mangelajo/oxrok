@@ -98,8 +98,18 @@ fn capture(
     (bits, at)
 }
 
+// Rates above 1 MHz load the vendor FPGA image, which the user extracts
+// from the LogicPort software; the recording holds the bytes the device
+// saw, so the test needs the same file to reproduce them.
 #[test]
 fn ten_megahertz_capture_with_fpga_configuration() {
+    if ["intronix-logicport.ccf", "intronix-logicport-timing-sdr.rbf"]
+        .iter()
+        .all(|n| oxrok::core::firmware::find_file(n).is_none())
+    {
+        eprintln!("skipped: no LogicPort FPGA image installed, see docs/DEVICES.md");
+        return;
+    }
     let (want, t) = expected(include_str!("fixtures/logicport/capture-10m-clk1.bits"));
     assert_eq!(t, 32);
     let (bits, at) = capture(

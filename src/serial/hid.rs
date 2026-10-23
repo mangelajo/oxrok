@@ -437,13 +437,13 @@ mod tests {
             wire[i] = plain[13 - SHUFFLE[i]].reverse_bits().wrapping_add(OFFSETS[i]);
         }
         assert_eq!(victor_unscramble(&wire), plain.to_vec());
-        assert!(victor_unscramble(&[0u8; 14]).is_empty());
+        assert_eq!(victor_unscramble(&[0u8; 14]), Vec::<u8>::new());
         assert_eq!(victor_unscramble(&[1, 2]), vec![1, 2]);
         let (mut p, fake) = port(Chip::Victor, &[&wire]);
         let mut buf = [0u8; 14];
         assert_eq!(p.read(&mut buf, T).unwrap(), 14);
         assert_eq!(buf, plain);
         p.write(b"ignored").unwrap();
-        assert!(fake.output().is_empty());
+        assert_eq!(fake.output().len(), 0);
     }
 }

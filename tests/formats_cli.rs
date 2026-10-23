@@ -54,7 +54,7 @@ fn session_file_round_trip() {
         W1.iter().copied().chain(["--samples", "20", "-o", file.to_str().unwrap()]).collect();
     let (out, err, ok) = oxrok(&args);
     assert!(ok, "{err}");
-    assert!(out.is_empty());
+    assert_eq!(out.len(), 0);
     // Read it back: same bits, and the properties sigrok-cli --show prints.
     let (out, err, ok) = oxrok(&["-i", file.to_str().unwrap(), "-O", "bits"]);
     assert!(ok, "{err}");

@@ -340,7 +340,7 @@ fn time_limit_and_output_file() {
         file.to_str().unwrap(),
     ]);
     assert!(ok, "{err}");
-    assert!(out.is_empty());
+    assert_eq!(out.len(), 0);
     let text = std::fs::read_to_string(&file).unwrap();
     // 10 ms at 200 kHz is 2000 samples: 192 per line, 11 lines.
     assert_eq!(text.lines().count(), 2 + 11, "{text}");
