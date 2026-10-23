@@ -413,19 +413,24 @@ mod tests {
     #[test]
     fn packets_parse() {
         // 23.5 C on T1.
-        let p = packet(b"0235", b'1', b'0', b'1');
+        let p = packet(*b"0235", b'1', b'0', b'1');
         assert_eq!(p.len(), PACKET_SIZE);
-        assert_eq!(parse_packet(&p).unwrap(), Some((0, 23.5, Unit::Celsius, MqFlags::empty())));
+        assert_eq!(parse_packet(&p), Parsed::Reading(0, 23.5, Unit::Celsius, MqFlags::empty()));
         // -1.2 F on T2.
-        let (ch, v, unit, _) = parse_packet(&packet(b";:12", b'2', b'1', b'1')).unwrap().unwrap();
+        let Parsed::Reading(ch, v, unit, _) = parse_packet(&packet(*b";:12", b'2', b'1', b'1'))
+        else {
+            panic!()
+        };
         assert_eq!((ch, unit), (1, Unit::Fahrenheit));
         assert!((v + 1.2).abs() < 1e-5);
         // The difference channel, in kelvin, is relative.
-        let (ch, _, unit, flags) =
-            parse_packet(&packet(b"0010", b'3', b'2', b'1')).unwrap().unwrap();
+        let Parsed::Reading(ch, _, unit, flags) = parse_packet(&packet(*b"0010", b'3', b'2', b'1'))
+        else {
+            panic!()
+        };
         assert_eq!((ch, unit, flags), (2, Unit::Kelvin, MqFlags::RELATIVE));
         // No measurement, and not a packet.
-        assert_eq!(parse_packet(&packet(b";;;;", b'1', b'0', b'1')).unwrap(), None);
-        assert!(parse_packet(&packet(b"0235", b'1', b'0', b'0')).is_err());
+        assert_eq!(parse_packet(&packet(*b";;;;", b'1', b'0', b'1')), Parsed::Empty);
+        assert_eq!(parse_packet(&packet(*b"0235", b'1', b'0', b'0')), Parsed::Invalid);
     }
 }
