@@ -228,6 +228,77 @@ One difference from libsigrok on purpose: `horiz_triggerpos` is
 converted to seconds with the number of horizontal divisions, where
 libsigrok multiplies by the number of timebases in its table.
 
+Verification: the Pico emulator has a `usbtmc` mode that is a Rigol
+DS1102E on a real USBTMC interface (the DS1000 command set, a sine on
+CH1 and a ramp on CH2, 600 point live frames). Against it, `--show` at
+device and channel group level, single and dual channel frames, two
+frame runs, and runs with `timebase`, `triggersource`, `triggerslope`,
+`vdiv`, `coupling` and `probe_factor` set are byte identical between
+oxrok and sigrok-cli; `tools/diffcli.sh --hw` runs those cases when
+the emulator is in that mode. The memory data source fails on the
+DS1000 series in both tools (libsigrok cannot read the sample rate
+there). The DS1000E replay test runs the same path without hardware.
+Still open: the user's real DS1102E, and the other series, for which
+`OXROK_SCPI_RECORD=FILE` captures a fixture from any run.
+
+## Raspberry Pi Pico (sigrok-pico firmware)
+
+A Pico running the sigrok-pico firmware is a 21 channel logic analyzer
+with 3 analog inputs over its USB serial port, driver `raspberrypi-pico`.
+`conn=` is required; the Pico shows up as a CDC port (`/dev/cu.usbmodem*`
+on macOS, `/dev/ttyACM*` on Linux):
+
+```
+oxrok -d raspberrypi-pico:conn=/dev/ttyACM0 -c samplerate=1M -C D2,D3,D4 --samples 100 -O bits
+oxrok -d raspberrypi-pico:conn=/dev/ttyACM0 -c samplerate=100k -C A0,D2 --samples 50 -O csv
+oxrok -d raspberrypi-pico:conn=/dev/ttyACM0 -c samplerate=1M -C D2,D3 -t D2=r --samples 1000 -O bits
+```
+
+Digital channels are `D2` to `D22` (the board's GPIO numbers) and must
+be enabled from D2 up without gaps; analog `A0` to `A2` are GPIO 26 to
+28 scaled to volts. The firmware takes any sample rate and the driver
+rounds it to a common divisor when analog and digital run together, as
+libsigrok does. Triggers run on the host (one stage, digital channels,
+with `captureratio` of pre-trigger samples); the device streams until
+told to stop. Rates the firmware cannot do abort the capture, the same
+way in both tools (one analog channel at 1 MHz, for example).
+
+Verified 2026-10-23 on a Pico with `pico_baseline.uf2`: `--show`, bits,
+hex, ascii, csv with and without trigger marks, analog, mixed and
+triggered captures are byte identical between oxrok and sigrok-cli;
+two recorded sessions are the replay tests. Not yet exercised: a real
+signal on the inputs (a wire from the ESP32 to GPIO 2 would do) and the
+larger digital-only firmware variants.
+
+## Rigol and Agilent oscilloscopes
+
+The `rigol-ds` driver covers the same 61 models as libsigrok's: Rigol
+VS5000, DS1000 (DS1052E, DS1102E, DS1152E and the D variants with the
+logic pod), DS2000 and DS2000A/MSO2000A, DS1000Z and MSO1000Z, DS4000,
+MSO5000, and the Agilent DSO1000A/B and MSO7034A. It speaks SCPI over
+`oxrok-scpi`, which carries USBTMC (the USB port on the scope), raw TCP,
+Rigol's length prefixed TCP and serial ports:
+
+```
+oxrok -d rigol-ds --show                           # any USBTMC scope
+oxrok -d rigol-ds:conn=usbtmc/1.5 --frames 1 -O analog
+oxrok -d rigol-ds:conn=tcp-rigol/192.168.1.20/5555 -c timebase=1ms -C CH1 --frames 2 -O csv
+```
+
+Options follow sigrok: `timebase`, `triggersource`, `triggerslope`,
+`triggerlevel`, `horiz_triggerpos`, `data_source` (`Live`, `Memory`,
+`Segmented` as the series allows) and `limit_frames`; per analog channel
+group (`-g CH1`) `vdiv`, `coupling` and `probe_factor`. Every setting is
+written to the scope at once and the current values are read back when
+the device opens. A capture downloads each enabled channel once per
+frame, scaled to volts, between `FRAME-BEGIN` and `FRAME-END`; the
+sample rate is the frame length over the screen width for `Live`
+and `:WAV:XINC?` for the memory sources.
+
+One difference from libsigrok on purpose: `horiz_triggerpos` is
+converted to seconds with the number of horizontal divisions, where
+libsigrok multiplies by the number of timebases in its table.
+
 Verification: the DS1000E path (readback, one live frame, key unlock
 on close) runs in a replay test against a hand written SCPI fixture
 with the exact command sequence; the user's DS1102E is the bench device

@@ -261,7 +261,10 @@ fn print_option(device: &dyn Device, key: &Key, access: oxrok_core::Access, grou
             }
         }
         _ => match key.kind() {
-            ValueKind::U64 | ValueKind::I32 => {
+            // sigrok-cli has no branch for signed integers and prints
+            // the key alone.
+            ValueKind::I32 => println!("    {id}"),
+            ValueKind::U64 => {
                 print!("    {id}: ");
                 let current = get().and_then(|v| v.as_u64());
                 match list() {
@@ -371,25 +374,25 @@ fn print_option(device: &dyn Device, key: &Key, access: oxrok_core::Access, grou
                 println!();
             }
             ValueKind::RationalPeriod | ValueKind::RationalVolt => {
-                print!("    {id}: ");
+                // sigrok-cli: the key alone when there is no list, else
+                // one formatted value per line.
+                print!("    {id}");
                 let current = get();
                 if let Some(ValueList::Rational(values)) = list() {
-                    let parts: Vec<String> = values
-                        .iter()
-                        .map(|(p, q)| {
-                            let v = Value::Rational(*p, *q);
-                            if Some(&v) == current.as_ref() {
-                                format!("{v} (current)")
-                            } else {
-                                v.to_string()
-                            }
-                        })
-                        .collect();
-                    println!("{}", parts.join(", "));
-                } else {
-                    if let Some(v) = current {
-                        print!("{v} (current)");
+                    println!(" - supported values:");
+                    for (p, q) in values {
+                        let text = if key.kind() == ValueKind::RationalPeriod {
+                            oxrok_core::util::period_string(p, q)
+                        } else {
+                            oxrok_core::util::voltage_string(p, q)
+                        };
+                        print!("      {text}");
+                        if current == Some(Value::Rational(p, q)) {
+                            print!(" (current)");
+                        }
+                        println!();
                     }
+                } else {
                     println!();
                 }
             }

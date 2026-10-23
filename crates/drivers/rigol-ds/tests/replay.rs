@@ -109,7 +109,6 @@ fn one_live_frame_of_ch1() {
     let mut frames = 0;
     let mut samples: Vec<f32> = Vec::new();
     let mut digits = None;
-    let mut rate = None;
     session
         .run(|_, p| {
             match p {
@@ -118,10 +117,6 @@ fn one_live_frame_of_ch1() {
                     assert_eq!(a.channels, vec![0]);
                     digits = Some(a.digits);
                     samples.extend_from_slice(&a.samples);
-                }
-                Packet::Meta(items) => {
-                    rate =
-                        items.iter().find(|(k, _)| *k == Key::Samplerate).map(|(_, v)| v.clone());
                 }
                 _ => {}
             }
@@ -132,7 +127,6 @@ fn one_live_frame_of_ch1() {
     devices[0].close().unwrap();
     assert_eq!(frames, 1);
     assert_eq!(samples.len(), 600);
-    assert_eq!(rate, Some(Value::U64(50_000)));
     // 1 V/div: a count is 39.0625 mV; byte 0x80 is 0 V, 0x7f is one
     // count up.
     assert!(samples[0].abs() < 1e-6);

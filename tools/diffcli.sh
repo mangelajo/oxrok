@@ -236,6 +236,14 @@ if [ $hw = 1 ]; then
         case_ "pico mixed csv" --filter 's/[0-9]*\.[0-9][0-9]*/V/g' -- -d $RP -c samplerate=100k -C A0,A1,D2,D3 --samples 3 -O csv:header=false
         case_ "pico trigger csv" -- -d $RP -c samplerate=1M -C D2,D3 -t D2=0 --samples 40 -O csv:trigger=true:header=false
     fi
+    # A Rigol scope, or the Pico emulating a DS1102E on USBTMC.
+    if "$OXROK" -d rigol-ds --scan 2>/dev/null | grep -q rigol-ds; then
+        case_ "rigol show" --keep-header -- -d rigol-ds --show
+        case_ "rigol show CH1" --keep-header -- -d rigol-ds -g CH1 --show
+        case_ "rigol frame" -- -d rigol-ds -C CH1 --frames 1 -O analog
+        case_ "rigol two frames two channels" -- -d rigol-ds -C CH1,CH2 --frames 2 -O analog
+        case_ "rigol settings" -- -d rigol-ds -c timebase=500us:triggersource=CH2:triggerslope=f -g CH1 -c vdiv=500mV:coupling=AC:probe_factor=1 --frames 1 -C CH1 -O analog
+    fi
     case_ "fx2lafw show" --keep-header -- -d fx2lafw --show
     case_ "fx2lafw bits 1M" -- -d fx2lafw -c samplerate=1M --samples 64 -O bits
     case_ "fx2lafw hex 24M" -- -d fx2lafw -c samplerate=24M --samples 1024 -O hex

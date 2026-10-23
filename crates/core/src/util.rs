@@ -196,6 +196,16 @@ pub fn period_string(p: u64, q: u64) -> String {
     }
 }
 
+/// A voltage `p/q` volts as sigrok prints it: `500 mV`, `2 V`, else a
+/// float with the unit.
+pub fn voltage_string(p: u64, q: u64) -> String {
+    match q {
+        1000 => format!("{p} mV"),
+        1 => format!("{p} V"),
+        _ => format!("{} V", fmt_g(p as f64 / q as f64, 6)),
+    }
+}
+
 /// Formats `value` like C's `%.<precision>g`: `precision` significant
 /// digits, trailing zeros removed, exponent form when the exponent is
 /// below -4 or at least `precision`.

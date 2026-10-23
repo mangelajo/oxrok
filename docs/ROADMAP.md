@@ -45,9 +45,7 @@ Hardware checks not yet done, with what each needs:
 - HID cables: the BU-86X, CH9325 and Victor paths are verified with
   the Pico emulator (see `docs/DEVICES.md`); the CP2110 framing and
   feature reports are tested only against the C code.
-- `rigol-ds` on the DS1102E: plug the scope in, run
-  `oxrok -d rigol-ds --show` and `oxrok -d rigol-ds --frames 1 -O analog`
-  with `OXROK_SCPI_RECORD` set, compare with sigrok-cli, and turn the
-  recording into the replay fixture. The DS1000 memory source (1 M
-  points per channel over USBTMC) and the firmware version split
-  (bare bytes before 0.2.4) are untested.
+- `rigol-ds` on the real DS1102E: the driver matches sigrok-cli on the
+  Pico's USBTMC emulation of that model; the real scope decides the
+  details the emulation guessed (status strings, timing, the memory
+  source answer). Record with `OXROK_SCPI_RECORD` and compare.

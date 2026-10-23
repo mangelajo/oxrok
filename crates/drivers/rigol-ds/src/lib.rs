@@ -44,8 +44,8 @@ use std::time::{Duration, Instant};
 
 const SCAN_OPTIONS: [Key; 2] = [Key::Conn, Key::Serialcomm];
 const CLASSES: [DeviceClass; 1] = [DeviceClass::Oscilloscope];
-static DEV_OPTIONS: [OptionDesc; 10] = [
-    OptionDesc::new(Key::Conn, Access::GET),
+// sigrok's driver lists no conn option, so sigrok-cli prints none.
+static DEV_OPTIONS: [OptionDesc; 9] = [
     OptionDesc::new(Key::LimitFrames, Access::GET_SET),
     OptionDesc::new(Key::Samplerate, Access::GET),
     OptionDesc::new(Key::Timebase, Access::GET_SET_LIST),
@@ -161,6 +161,7 @@ struct State {
 pub struct RigolDevice {
     model: &'static Model,
     info: DeviceInfo,
+    resource: String,
     format: Format,
     channels: Vec<Channel>,
     groups: Vec<ChannelGroup>,
@@ -207,13 +208,14 @@ impl RigolDevice {
         let n = model.analog_channels;
         RigolDevice {
             model,
+            resource: scpi.resource().to_owned(),
             info: DeviceInfo {
                 driver: "rigol-ds",
                 vendor: model.series.vendor.name.to_owned(),
                 model: model.name.to_owned(),
                 version: id.firmware_version.clone(),
                 serial: id.serial_number.clone(),
-                conn: Some(scpi.resource().to_owned()),
+                conn: None,
             },
             format,
             channels,
@@ -369,6 +371,13 @@ fn read_vertical(scpi: &mut Scpi, model: &Model, st: &mut State) -> Result<()> {
     Ok(())
 }
 
+/// True when two rationals are the same value, whatever their form:
+/// the parser reduces `500us` to 1/2000 while the tables keep
+/// 500/1000000.
+fn same_ratio(a: (u64, u64), b: (u64, u64)) -> bool {
+    u128::from(a.0) * u128::from(b.1) == u128::from(b.0) * u128::from(a.1)
+}
+
 /// The table entry nearest to `value`.
 fn nearest(table: &[(u64, u64)], value: f32) -> Option<(u64, u64)> {
     table.iter().copied().min_by(|a, b| {
@@ -450,7 +459,6 @@ impl Device for RigolDevice {
         let ch = self.analog_group(group)?;
         let need_group = |v: Option<usize>| v.ok_or(Error::ChannelGroup(String::new()));
         Ok(match key {
-            Key::Conn => Value::Str(self.info.conn.clone().unwrap_or_default()),
             Key::NumHdiv => Value::I32(self.model.series.num_hdiv),
             Key::NumVdiv => Value::I32(self.model.vdivs().len() as i32),
             Key::DataSource => Value::Str(st.data_source.name().to_owned()),
@@ -530,7 +538,7 @@ impl Device for RigolDevice {
             }
             Key::Timebase => {
                 let Value::Rational(p, q) = value else { return Err(bad()) };
-                if !self.model.timebases().contains(&(*p, *q)) {
+                if !self.model.timebases().iter().any(|t| same_ratio(*t, (*p, *q))) {
                     return Err(bad());
                 }
                 let tb = *p as f64 / *q as f64;
@@ -549,7 +557,7 @@ impl Device for RigolDevice {
             Key::Vdiv => {
                 let i = need_group(ch)?;
                 let Value::Rational(p, q) = value else { return Err(bad()) };
-                if !models::VDIVS.contains(&(*p, *q)) {
+                if !models::VDIVS.iter().any(|v| same_ratio(*v, (*p, *q))) {
                     return Err(bad());
                 }
                 let v = *p as f64 / *q as f64;
@@ -619,8 +627,7 @@ impl Device for RigolDevice {
         let scpi = if let Some(s) = self.pending.take() {
             s
         } else {
-            let conn = self.info.conn.clone().unwrap_or_default();
-            oxrok_scpi::open(&oxrok_scpi::Resource::parse(&conn)?, None)?
+            oxrok_scpi::open(&oxrok_scpi::Resource::parse(&self.resource)?, None)?
         };
         *self.scpi.lock().expect("scpi lock") = Some(scpi);
         self.read_config()
@@ -862,7 +869,6 @@ impl Acquisition {
             st.sample_rate = 1.0 / xinc;
         }
         self.state.lock().expect("state lock").clone_from(&st);
-        sink.send(Packet::meta(Key::Samplerate, Value::U64(st.sample_rate as u64)));
 
         let mut vertical = vec![Vertical::default(); self.model.analog_channels];
         let mut num_frames = 0u64;

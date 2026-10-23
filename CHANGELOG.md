@@ -9,8 +9,9 @@ release may change the library API.
 ### Changed
 
 - The bits and hex outputs drop a trigger marker that falls in the last,
-  partial line, as sigrok's do; serial devices show no `conn` in
-  `--show`, as in sigrok-cli.
+  partial line, as sigrok's do; serial devices and `rigol-ds` show no
+  `conn` in `--show`, rational lists print one value per line and
+  signed integer keys print their name alone, as sigrok-cli does.
 - The reference for byte compatibility is now sigrok-cli 0.8.0-git with
   libsigrok 0.6.0-git: the CSV time column starts at 0 and the VCD body
   has a blank line after the definitions and two spaces after each
