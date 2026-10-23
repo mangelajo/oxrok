@@ -129,6 +129,35 @@ small fixes in libsigrok's `serial_hid.c` to work on this macOS at all
 (the `DevSrvsID:` paths of current hidapi, and a double conversion of
 found paths); they are applied in the local build only.
 
+## Raspberry Pi Pico (sigrok-pico firmware)
+
+A Pico running the sigrok-pico firmware is a 21 channel logic analyzer
+with 3 analog inputs over its USB serial port, driver `raspberrypi-pico`.
+`conn=` is required; the Pico shows up as a CDC port (`/dev/cu.usbmodem*`
+on macOS, `/dev/ttyACM*` on Linux):
+
+```
+oxrok -d raspberrypi-pico:conn=/dev/ttyACM0 -c samplerate=1M -C D2,D3,D4 --samples 100 -O bits
+oxrok -d raspberrypi-pico:conn=/dev/ttyACM0 -c samplerate=100k -C A0,D2 --samples 50 -O csv
+oxrok -d raspberrypi-pico:conn=/dev/ttyACM0 -c samplerate=1M -C D2,D3 -t D2=r --samples 1000 -O bits
+```
+
+Digital channels are `D2` to `D22` (the board's GPIO numbers) and must
+be enabled from D2 up without gaps; analog `A0` to `A2` are GPIO 26 to
+28 scaled to volts. The firmware takes any sample rate and the driver
+rounds it to a common divisor when analog and digital run together, as
+libsigrok does. Triggers run on the host (one stage, digital channels,
+with `captureratio` of pre-trigger samples); the device streams until
+told to stop. Rates the firmware cannot do abort the capture, the same
+way in both tools (one analog channel at 1 MHz, for example).
+
+Verified 2026-10-23 on a Pico with `pico_baseline.uf2`: `--show`, bits,
+hex, ascii, csv with and without trigger marks, analog, mixed and
+triggered captures are byte identical between oxrok and sigrok-cli;
+two recorded sessions are the replay tests. Not yet exercised: a real
+signal on the inputs (a wire from the ESP32 to GPIO 2 would do) and the
+larger digital-only firmware variants.
+
 ## Rigol and Agilent oscilloscopes
 
 The `rigol-ds` driver covers the same 61 models as libsigrok's: Rigol

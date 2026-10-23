@@ -1,0 +1,115 @@
+# oxrok serial fixture 1
+port /dev/cu.usbmodem11401 115200/8n1/rts=0/dtr=1
+write 2a
+read 256 -> -
+write 690a
+read 17 -> 53525049434f2c413033314432312c3032
+write 61300a
+read 20 -> 32353730307830
+read 13 -> -
+write 61310a
+read 20 -> 32353730307830
+read 13 -> -
+write 61320a
+read 20 -> 32353730307830
+read 13 -> -
+read 256 -> -
+write 2a
+read 256 -> -
+read 2 -> -
+write 4130300a
+read 1 -> 2a
+read 2 -> -
+write 4130310a
+read 1 -> 2a
+read 2 -> -
+write 4130320a
+read 1 -> 2a
+read 2 -> -
+write 4431300a
+read 1 -> 2a
+read 2 -> -
+write 4431310a
+read 1 -> 2a
+read 2 -> -
+write 4431320a
+read 1 -> 2a
+read 2 -> -
+write 4430330a
+read 1 -> 2a
+read 2 -> -
+write 4430340a
+read 1 -> 2a
+read 2 -> -
+write 4430350a
+read 1 -> 2a
+read 2 -> -
+write 4430360a
+read 1 -> 2a
+read 2 -> -
+write 4430370a
+read 1 -> 2a
+read 2 -> -
+write 4430380a
+read 1 -> 2a
+read 2 -> -
+write 4430390a
+read 1 -> 2a
+read 2 -> -
+write 443031300a
+read 1 -> 2a
+read 2 -> -
+write 443031310a
+read 1 -> 2a
+read 2 -> -
+write 443031320a
+read 1 -> 2a
+read 2 -> -
+write 443031330a
+read 1 -> 2a
+read 2 -> -
+write 443031340a
+read 1 -> 2a
+read 2 -> -
+write 443031350a
+read 1 -> 2a
+read 2 -> -
+write 443031360a
+read 1 -> 2a
+read 2 -> -
+write 443031370a
+read 1 -> 2a
+read 2 -> -
+write 443031380a
+read 1 -> 2a
+read 2 -> -
+write 443031390a
+read 1 -> 2a
+read 2 -> -
+write 443032300a
+read 1 -> 2a
+read 2 -> -
+write 4c31320a
+read 1 -> 2a
+write 61300a
+read 20 -> 32353730307830
+read 13 -> -
+write 61310a
+read 20 -> 32353730307830
+read 13 -> -
+write 61320a
+read 20 -> 32353730307830
+read 13 -> -
+write 52313030303030300a
+read 30 -> 2a
+read 29 -> -
+read 32000 -> -
+write 460a
+read 32000 -> -
+read 32000 -> -
+read 32000 -> -
+read 32000 -> 808080808080808030f0
+write 2b
+read 32000 -> -
+read 32000 -> 2431302b0a
+read 256 -> -

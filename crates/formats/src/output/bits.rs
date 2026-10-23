@@ -60,11 +60,15 @@ impl Bits {
         }
     }
 
-    fn flush(&mut self, out: &mut Vec<u8>) {
+    /// Writes the pending lines. The trigger marker goes out only with
+    /// a full line, as in sigrok, whose final flush at the end of the
+    /// capture drops it.
+    fn flush(&mut self, out: &mut Vec<u8>, with_trigger: bool) {
         for (j, line) in self.lines.iter_mut().enumerate() {
             out.extend_from_slice(line.as_bytes());
             out.push(b'\n');
-            if j + 1 == self.channels.len()
+            if with_trigger
+                && j + 1 == self.channels.len()
                 && let Some(t) = self.trigger.take()
             {
                 let offset = t + t / 8;
@@ -103,13 +107,13 @@ impl Output for Bits {
                         }
                     }
                     if self.count == self.width {
-                        self.flush(out);
+                        self.flush(out, true);
                         self.count = 0;
                     }
                 }
             }
             Packet::End if self.count != 0 => {
-                self.flush(out);
+                self.flush(out, false);
                 self.count = 0;
             }
             _ => {}

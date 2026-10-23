@@ -8,6 +8,9 @@ release may change the library API.
 
 ### Changed
 
+- The bits and hex outputs drop a trigger marker that falls in the last,
+  partial line, as sigrok's do; serial devices show no `conn` in
+  `--show`, as in sigrok-cli.
 - The reference for byte compatibility is now sigrok-cli 0.8.0-git with
   libsigrok 0.6.0-git: the CSV time column starts at 0 and the VCD body
   has a blank line after the definitions and two spaces after each
@@ -26,6 +29,8 @@ release may change the library API.
   serial ports, with the IEEE 488.2 helpers and a text fixture of
   commands and responses (`OXROK_SCPI_RECORD`). `oxrok-usb` reports
   interface classes and endpoints.
+- `oxrok-driver-raspberrypi-pico`: the `raspberrypi-pico` driver for the
+  sigrok-pico firmware, verified against sigrok-cli on a Pico.
 - `oxrok-driver-rigol-ds`: the `rigol-ds` scope driver with all 61
   Rigol and Agilent models of libsigrok; frames as analog packets
   between `FrameBegin` and `FrameEnd`, which the analog output prints

@@ -36,6 +36,7 @@ fn registry() -> Registry {
     r.register(Box::new(oxrok_driver_logicport::LogicPortDriver));
     oxrok_driver_serial_dmm::register_all(&mut r);
     r.register(Box::new(oxrok_driver_rigol_ds::RigolDsDriver));
+    r.register(Box::new(oxrok_driver_raspberrypi_pico::RaspberryPiPicoDriver));
     r.register(Box::new(oxrok_driver_fx2lafw::Fx2lafwDriver));
     r
 }

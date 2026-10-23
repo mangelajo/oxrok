@@ -216,6 +216,26 @@ if [ $hw = 1 ]; then
         case_ "hid dmm victor" -- -d victor-dmm --samples 2
         mode bu86x
     fi
+    # A Pico running the sigrok-pico firmware, found by asking every CDC
+    # port that is not the HID cable emulator. Inputs float, so the
+    # trigger is a level that fires at once.
+    PICO=${PICO_PORT:-}
+    if [ -z "$PICO" ]; then
+        for p in /dev/cu.usbmodem* /dev/ttyACM*; do
+            case "$p" in *HIDCABLE*|*\**) continue ;; esac
+            if "$OXROK" -d raspberrypi-pico:conn=$p --show >/dev/null 2>&1; then PICO=$p; break; fi
+        done
+    fi
+    if [ -n "$PICO" ]; then
+        RP="raspberrypi-pico:conn=$PICO"
+        case_ "pico show" --keep-header -- -d $RP --show
+        case_ "pico bits d4" -- -d $RP -c samplerate=1M -C D2,D3,D4 --samples 12 -O bits
+        case_ "pico hex 5 channels" -- -d $RP -c samplerate=1M -C D2,D3,D4,D5,D6 --samples 20 -O hex
+        # The analog inputs float, so their values differ between runs:
+        # only the shape of the mixed output is compared.
+        case_ "pico mixed csv" --filter 's/[0-9]*\.[0-9][0-9]*/V/g' -- -d $RP -c samplerate=100k -C A0,A1,D2,D3 --samples 3 -O csv:header=false
+        case_ "pico trigger csv" -- -d $RP -c samplerate=1M -C D2,D3 -t D2=0 --samples 40 -O csv:trigger=true:header=false
+    fi
     case_ "fx2lafw show" --keep-header -- -d fx2lafw --show
     case_ "fx2lafw bits 1M" -- -d fx2lafw -c samplerate=1M --samples 64 -O bits
     case_ "fx2lafw hex 24M" -- -d fx2lafw -c samplerate=24M --samples 1024 -O hex

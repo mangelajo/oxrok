@@ -44,8 +44,9 @@ use std::time::{Duration, Instant};
 
 const SCAN_OPTIONS: [Key; 2] = [Key::Conn, Key::Serialcomm];
 const CLASSES: [DeviceClass; 1] = [DeviceClass::Multimeter];
-static DEV_OPTIONS: [OptionDesc; 4] = [
-    OptionDesc::new(Key::Conn, Access::GET),
+// sigrok lists conn for these meters but cannot read it back, so its
+// show output has neither the option nor the connection in the header.
+static DEV_OPTIONS: [OptionDesc; 3] = [
     OptionDesc::new(Key::Continuous, Access::NONE),
     OptionDesc::new(Key::LimitSamples, Access::GET_SET),
     OptionDesc::new(Key::LimitMsec, Access::GET_SET),
@@ -222,7 +223,7 @@ impl DmmDevice {
                 model: model.model.to_owned(),
                 version: String::new(),
                 serial: String::new(),
-                conn: Some(conn.clone()),
+                conn: None,
             },
             channels,
             conn,
@@ -281,7 +282,6 @@ impl Device for DmmDevice {
             return Err(Error::ChannelGroup(g.to_owned()));
         }
         Ok(match key {
-            Key::Conn => Value::Str(self.conn.clone()),
             Key::LimitSamples => Value::U64(self.limit_samples),
             Key::LimitMsec => Value::U64(self.limit_msec),
             other => return Err(Error::UnknownKey(other.id().to_owned())),

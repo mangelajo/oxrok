@@ -14,6 +14,7 @@ members = [
     "crates/drivers/fx2lafw",
     "crates/drivers/serial-dmm",
     "crates/drivers/rigol-ds",
+    "crates/drivers/raspberrypi-pico",
     "crates/dmm",
     "crates/decode",
     "crates/decoders",
@@ -41,6 +42,7 @@ oxrok-scpi = { path = "crates/scpi", version = "0.1.0" }
 oxrok-dmm = { path = "crates/dmm", version = "0.1.0" }
 oxrok-driver-serial-dmm = { path = "crates/drivers/serial-dmm", version = "0.1.0" }
 oxrok-driver-rigol-ds = { path = "crates/drivers/rigol-ds", version = "0.1.0" }
+oxrok-driver-raspberrypi-pico = { path = "crates/drivers/raspberrypi-pico", version = "0.1.0" }
 oxrok-ezusb = { path = "crates/ezusb", version = "0.1.0" }
 oxrok-driver-demo = { path = "crates/drivers/demo", version = "0.1.0" }
 oxrok-driver-logicport = { path = "crates/drivers/logicport", version = "0.1.0" }

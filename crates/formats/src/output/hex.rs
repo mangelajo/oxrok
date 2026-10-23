@@ -60,11 +60,14 @@ impl Hex {
         }
     }
 
-    fn flush(&mut self, out: &mut Vec<u8>) {
+    /// Writes the pending lines; the trigger marker only goes out with
+    /// a full line, as in sigrok.
+    fn flush(&mut self, out: &mut Vec<u8>, with_trigger: bool) {
         for (j, line) in self.lines.iter_mut().enumerate() {
             out.extend_from_slice(line.as_bytes());
             out.push(b'\n');
-            if j + 1 == self.channels.len()
+            if with_trigger
+                && j + 1 == self.channels.len()
                 && let Some(t) = self.trigger.take()
             {
                 let offset = t / 4 + t / 8;
@@ -110,7 +113,7 @@ impl Output for Hex {
                         }
                     }
                     if self.count == self.width {
-                        self.flush(out);
+                        self.flush(out, true);
                         self.count = 0;
                     }
                 }
@@ -123,7 +126,7 @@ impl Output for Hex {
                         self.bytes[j] = 0;
                     }
                 }
-                self.flush(out);
+                self.flush(out, false);
                 self.count = 0;
             }
             _ => {}
