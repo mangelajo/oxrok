@@ -507,3 +507,100 @@ mod tests {
         assert!(qm1578_parse(&p).unwrap().value.is_infinite());
     }
 }
+
+// UT372 tachometer: libsigrok/src/dmm/ut372.c, Copyright (C) 2014
+// Martin Ling <martin-sigrok@earth.li>.
+
+/// UT372: 27 bytes, hex digit pairs.
+pub const UT372_SIZE: usize = 27;
+
+const UT372_DIGITS: [u8; 10] = [0x7b, 0x60, 0x5e, 0x7c, 0x65, 0x3d, 0x3f, 0x70, 0x7f, 0x7d];
+
+/// Two ASCII hex digits, with letters past `9` taken as `A` to `F`.
+fn ut372_pair(b: &[u8]) -> u8 {
+    let nibble = |c: u8| {
+        let c = if c > 0x39 { c + 7 } else { c };
+        u8::from_str_radix(std::str::from_utf8(&[c]).unwrap_or("0"), 16).unwrap_or(0)
+    };
+    nibble(b[0]) << 4 | nibble(b[1])
+}
+
+/// True for a UT372 packet: CR LF at the end and the RPM or count
+/// mode lit (neither means the setup menu).
+pub fn ut372_valid(buf: &[u8]) -> bool {
+    buf.len() >= UT372_SIZE
+        && buf[25] == b'\r'
+        && buf[26] == b'\n'
+        && ut372_pair(&buf[23..25]) & 0x03 != 0
+}
+
+/// The reading of a UT372 packet: revolutions per minute or a count.
+pub fn ut372_parse(buf: &[u8]) -> Option<Reading> {
+    if !ut372_valid(buf) {
+        return None;
+    }
+    let flags1 = ut372_pair(&buf[21..23]);
+    let flags2 = ut372_pair(&buf[23..25]);
+    let mut r = if flags2 & 0x01 != 0 {
+        Reading::new(0.0, Mq::Frequency, Unit::RevolutionsPerMinute, 0)
+    } else {
+        Reading::new(0.0, Mq::Count, Unit::Unitless, 0)
+    };
+    if flags1 & 0x04 != 0 {
+        r.flags |= MqFlags::HOLD;
+    }
+    if flags2 & 0x20 != 0 {
+        r.flags |= MqFlags::MIN;
+    }
+    if flags2 & 0x10 != 0 {
+        r.flags |= MqFlags::MAX;
+    }
+    if flags2 & 0x40 != 0 {
+        r.flags |= MqFlags::AVG;
+    }
+    let mut value = 0u32;
+    let mut exponent = 0i32;
+    for i in 0..5 {
+        let seg = ut372_pair(&buf[1 + 2 * i..3 + 2 * i]);
+        if let Some(d) = UT372_DIGITS.iter().position(|s| *s == seg & 0x7f) {
+            value += d as u32 * 10u32.pow(i as u32);
+        }
+        if seg & 0x80 != 0 {
+            exponent = -(i as i32);
+        }
+    }
+    (r.value, r.digits) = scaled(value as f32, exponent);
+    Some(r)
+}
+
+#[cfg(test)]
+mod ut372_tests {
+    use super::*;
+
+    #[test]
+    fn ut372_packet() {
+        // Digits 1234.5: pairs run from the least significant digit,
+        // the point sits on the tens pair (0x80), RPM mode with max.
+        // Hex digits above 9 come as the characters after '9'.
+        let pair = |b: u8| [b'0' + (b >> 4), b'0' + (b & 0x0f)];
+        let mut p = Vec::new();
+        p.push(b'0');
+        for seg in [0x3d_u8, 0xe5, 0x7c, 0x5e, 0x60] {
+            p.extend(pair(seg));
+        }
+        p.extend(b"0000000000");
+        p.extend(b"00");
+        p.extend(b"11");
+        p.extend(b"\r\n");
+        assert_eq!(p.len(), UT372_SIZE);
+        assert!(ut372_valid(&p));
+        let r = ut372_parse(&p).unwrap();
+        assert_eq!((r.mq, r.unit, r.digits), (Mq::Frequency, Unit::RevolutionsPerMinute, 1));
+        assert!((r.value - 1234.5).abs() < 1e-3);
+        assert!(r.flags.contains(MqFlags::MAX));
+        // Setup menu: neither mode bit.
+        p[23] = b'0';
+        p[24] = b'0';
+        assert!(!ut372_valid(&p));
+    }
+}

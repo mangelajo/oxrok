@@ -118,7 +118,12 @@ impl HidDevice for Native {
     }
 
     fn get_feature(&mut self, buf: &mut [u8]) -> Result<usize> {
-        block_on(self.feature.read_feature_report(buf)).map_err(|e| map(&e))
+        let n = block_on(self.feature.read_feature_report(buf)).map_err(|e| map(&e))?;
+        // hidapi counts the report id byte in the length; the macOS
+        // backend returns only the data length for unnumbered reports.
+        #[cfg(target_os = "macos")]
+        let n = if buf.first() == Some(&0) { (n + 1).min(buf.len()) } else { n };
+        Ok(n)
     }
 
     fn set_feature(&mut self, data: &[u8]) -> Result<()> {

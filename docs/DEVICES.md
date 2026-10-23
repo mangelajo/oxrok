@@ -129,6 +129,47 @@ small fixes in libsigrok's `serial_hid.c` to work on this macOS at all
 (the `DevSrvsID:` paths of current hidapi, and a double conversion of
 found paths); they are applied in the local build only.
 
+### UNI-T meters on the UT-D04 cable, and the UT32x
+
+libsigrok's `uni-t-dmm` driver covers 27 meters whose UT-D04 cable is a
+CH9325 HID bridge (`uni-t-ut61e`, `voltcraft-vc820`, `tenma-72-7730`,
+`uni-t-ut372`, ...). oxrok registers the same ids as twins of the
+serial entries over `hid/ch9325`, so they scan without `conn=` and also
+take sigrok's `conn=1a86.e008` form. The UT372 tachometer parser came
+with them. The UNI-T UT32x thermometer (`uni-t-ut32x`) has its own
+driver: channels `T1`, `T2`, `T1-T2`, `data_source` `Live` or `Memory`,
+`conn=` required since the cable cannot be told from any other UT-D04.
+Both were exercised with the Pico emulator in CH9325 mode (a UT61E
+stream for the meters, a 23.5 C packet for the UT32x); sigrok-cli has
+no reference run for them on macOS, where libusb cannot claim a HID.
+
+## USB relay boards and the PICkit2
+
+`dcttech-usbrelay` switches the dcttech relay boards (`R1` to `Rn`
+channel groups, `enabled` per group or for all at once):
+
+```
+oxrok -d dcttech-usbrelay --show
+oxrok -d dcttech-usbrelay -g R2 --set -c enabled=on
+oxrok -d dcttech-usbrelay:conn=sn=ABCDE -g R1 --get enabled
+```
+
+`microchip-pickit2` uses a PICkit2 as a three channel logic analyzer
+(pins 4 to 6, 1024 samples, 5 kHz to 1 MHz, a one stage trigger on
+levels and edges, `captureratio` presets 0 to 6 for the trigger
+position):
+
+```
+oxrok -d microchip-pickit2 -c samplerate=1M --samples 1024 -O bits
+oxrok -d microchip-pickit2 -c samplerate=250k:captureratio=2 -t pin5=r --samples 1024 -O csv
+```
+
+libsigrok reaches the PICkit2 with raw USB transfers, which macOS does
+not allow on a HID; oxrok speaks HID reports instead, so it works on
+every platform. Both drivers were verified against the Pico emulator
+(`MODE usbrelay`, `MODE pickit2`, which plays a counter on the three
+pins); the user's real PICkit2 is the next check.
+
 ## Raspberry Pi Pico (sigrok-pico firmware)
 
 A Pico running the sigrok-pico firmware is a 21 channel logic analyzer

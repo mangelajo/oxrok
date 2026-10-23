@@ -33,6 +33,8 @@ oxrok-driver-fx2lafw.workspace = true
 oxrok-driver-serial-dmm.workspace = true
 oxrok-driver-rigol-ds.workspace = true
 oxrok-driver-raspberrypi-pico.workspace = true
+oxrok-driver-dcttech-usbrelay.workspace = true
+oxrok-driver-microchip-pickit2.workspace = true
 oxrok-decode.workspace = true
 oxrok-decoders.workspace = true
 oxrok-pydecode = { workspace = true, optional = true }

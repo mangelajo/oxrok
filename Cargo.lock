@@ -717,9 +717,11 @@ dependencies = [
  "oxrok-core",
  "oxrok-decode",
  "oxrok-decoders",
+ "oxrok-driver-dcttech-usbrelay",
  "oxrok-driver-demo",
  "oxrok-driver-fx2lafw",
  "oxrok-driver-logicport",
+ "oxrok-driver-microchip-pickit2",
  "oxrok-driver-raspberrypi-pico",
  "oxrok-driver-rigol-ds",
  "oxrok-driver-serial-dmm",
@@ -762,6 +764,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "oxrok-driver-dcttech-usbrelay"
+version = "0.1.0"
+dependencies = [
+ "log",
+ "oxrok-core",
+ "oxrok-hid",
+]
+
+[[package]]
 name = "oxrok-driver-demo"
 version = "0.1.0"
 dependencies = [
@@ -787,6 +798,15 @@ dependencies = [
  "oxrok-core",
  "oxrok-ftdi",
  "oxrok-usb",
+]
+
+[[package]]
+name = "oxrok-driver-microchip-pickit2"
+version = "0.1.0"
+dependencies = [
+ "log",
+ "oxrok-core",
+ "oxrok-hid",
 ]
 
 [[package]]

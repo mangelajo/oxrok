@@ -153,6 +153,8 @@ const BM25X: Protocol =
     protocol(segments::BM25X_SIZE, segments::bm25x_valid, single!(segments::bm25x_parse));
 const QM1578: Protocol =
     protocol(segments::QM1578_SIZE, segments::qm1578_valid, single!(segments::qm1578_parse));
+const UT372: Protocol =
+    protocol(segments::UT372_SIZE, segments::ut372_valid, single!(segments::ut372_parse));
 const BM52X: Protocol = Protocol {
     packet_size: brymen::BRYMEN_SIZE,
     frame: None,
@@ -399,9 +401,78 @@ pub static MODELS: &[Model] = &[
     m("voltcraft-vc96", "Voltcraft", "VC-96", "1200/8n2", VC96),
 ];
 
-/// The model with driver id `id`.
-pub fn find(id: &str) -> Option<&'static Model> {
+/// The meters on the UNI-T UT-D04 cable, a CH9325 HID bridge: the ids
+/// of libsigrok's uni-t-dmm driver, each the HID twin of a serial
+/// entry (the same chipset at the same line parameters).
+const HID_MODELS: &[(&str, &str, &str, &str)] = &[
+    ("tenma-72-7750", "Tenma", "72-7750", "tenma-72-7750-ser"),
+    ("uni-t-ut60g", "UNI-T", "UT60G", "uni-t-ut60g-ser"),
+    ("uni-t-ut61e", "UNI-T", "UT61E", "uni-t-ut61e-ser"),
+    ("tecpel-dmm-8061", "Tecpel", "DMM-8061", "tecpel-dmm-8061-ser"),
+    ("tenma-72-7745", "Tenma", "72-7745", "tenma-72-7745-ser"),
+    ("uni-t-ut60a", "UNI-T", "UT60A", "uni-t-ut60a-ser"),
+    ("uni-t-ut60e", "UNI-T", "UT60E", "uni-t-ut60e-ser"),
+    ("voltcraft-vc820", "Voltcraft", "VC-820", "voltcraft-vc820-ser"),
+    ("voltcraft-vc840", "Voltcraft", "VC-840", "voltcraft-vc840-ser"),
+    ("uni-t-ut61b", "UNI-T", "UT61B", "uni-t-ut61b-ser"),
+    ("uni-t-ut61c", "UNI-T", "UT61C", "uni-t-ut61c-ser"),
+    ("uni-t-ut61d", "UNI-T", "UT61D", "uni-t-ut61d-ser"),
+    ("voltcraft-vc830", "Voltcraft", "VC-830", "voltcraft-vc830-ser"),
+    ("uni-t-ut372", "UNI-T", "UT372", ""),
+    ("tenma-72-7730", "Tenma", "72-7730", "tenma-72-7730-ser"),
+    ("tenma-72-7732", "Tenma", "72-7732", "tenma-72-7732-ser"),
+    ("tenma-72-9380a", "Tenma", "72-9380A", "tenma-72-9380a-ser"),
+    ("uni-t-ut71a", "UNI-T", "UT71A", "uni-t-ut71a-ser"),
+    ("uni-t-ut71b", "UNI-T", "UT71B", "uni-t-ut71b-ser"),
+    ("uni-t-ut71c", "UNI-T", "UT71C", "uni-t-ut71c-ser"),
+    ("uni-t-ut71d", "UNI-T", "UT71D", "uni-t-ut71d-ser"),
+    ("uni-t-ut71e", "UNI-T", "UT71E", "uni-t-ut71e-ser"),
+    ("uni-t-ut804", "UNI-T", "UT804", "uni-t-ut804-ser"),
+    ("voltcraft-vc920", "Voltcraft", "VC-920", "voltcraft-vc920-ser"),
+    ("voltcraft-vc940", "Voltcraft", "VC-940", "voltcraft-vc940-ser"),
+    ("voltcraft-vc960", "Voltcraft", "VC-960", "voltcraft-vc960-ser"),
+    ("voltcraft-vc870", "Voltcraft", "VC-870", "voltcraft-vc870-ser"),
+];
+
+/// The cable of the HID twins.
+pub const UT_D04_CONN: &str = "hid/ch9325";
+
+/// The meters on the UT-D04 HID cable, built once from [`HID_MODELS`].
+pub fn hid_models() -> &'static [Model] {
+    static TABLE: std::sync::OnceLock<Vec<Model>> = std::sync::OnceLock::new();
+    TABLE.get_or_init(|| {
+        HID_MODELS
+            .iter()
+            .map(|(id, vendor, model, base)| {
+                let (serialcomm, protocol) = if base.is_empty() {
+                    ("2400/8n1", UT372)
+                } else {
+                    let b = find_serial(base).expect("HID twin has a serial base");
+                    (b.serialcomm, b.protocol)
+                };
+                Model {
+                    id,
+                    vendor,
+                    model,
+                    conn: UT_D04_CONN,
+                    serialcomm,
+                    protocol,
+                    request_timeout_ms: 0,
+                    request_delay_ms: 0,
+                    after_open: None,
+                }
+            })
+            .collect()
+    })
+}
+
+fn find_serial(id: &str) -> Option<&'static Model> {
     MODELS.iter().find(|m| m.id == id)
+}
+
+/// The model with driver id `id`, serial or HID cable.
+pub fn find(id: &str) -> Option<&'static Model> {
+    find_serial(id).or_else(|| hid_models().iter().find(|m| m.id == id))
 }
 
 #[cfg(test)]
@@ -423,6 +494,13 @@ mod tests {
         assert_eq!(find("brymen-bm86x").unwrap().conn, "hid/bu86x");
         assert_eq!(find("victor-dmm").unwrap().protocol.packet_size, 14);
         assert_eq!(MODELS.len(), 69);
+        assert_eq!(hid_models().len(), 27);
+        let e = find("uni-t-ut61e").unwrap();
+        assert_eq!(
+            (e.conn, e.serialcomm, e.protocol.packet_size),
+            (UT_D04_CONN, "19200/7o1/rts=0/dtr=1", 14)
+        );
+        assert_eq!(find("uni-t-ut372").unwrap().protocol.packet_size, 27);
         assert!(find("brymen-bm85x").unwrap().protocol.frame.is_some());
     }
 }

@@ -13,6 +13,7 @@
 | 6b | serial transport and the serial multimeter family | done 2026-10-23: `oxrok-serial` with record and replay, `oxrok-dmm` with 20 chipset parsers, all 69 meters; UT61E and UT60A streams from the ESP32 identical to sigrok-cli; HID cables (`oxrok-hid`, BU-86X, CH9325, CP2110, Victor) added the same day, unverified for want of a cable |
 | 6c | SCPI transport (USBTMC, TCP, serial) and the first scope driver (`rigol-ds`) | code done 2026-10-23: `oxrok-scpi` with record and replay, `rigol-ds` with all 61 models and a DS1000E replay test; open: a real run on the user's DS1102E, then `--show` and frame output compared with sigrok-cli |
 | 6e | `raspberrypi-pico` (sigrok-pico firmware over USB serial) | done 2026-10-23: byte identical to sigrok-cli on a Pico, two recorded replay fixtures |
+| 6f | HID devices: `uni-t-dmm` twins, `uni-t-ut32x`, `dcttech-usbrelay`, `microchip-pickit2` | done 2026-10-23 against the Pico emulator; a real PICkit2 is the open check |
 | 6d | the remaining USB logic analyzers, one per recording | each ships a replay fixture; bench runs where the device is at hand |
 | 7 | packaging: static binaries, Homebrew, AUR, udev rules | a clean machine installs and captures without any sigrok package |
 | 8 | release 0.1 | tags, changelog, guides |

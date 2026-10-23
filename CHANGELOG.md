@@ -31,6 +31,10 @@ release may change the library API.
   interface classes and endpoints.
 - `oxrok-driver-raspberrypi-pico`: the `raspberrypi-pico` driver for the
   sigrok-pico firmware, verified against sigrok-cli on a Pico.
+- The 27 `uni-t-dmm` meter ids on the UT-D04 cable (over `hid/ch9325`),
+  the UT372 parser, and the `uni-t-ut32x` thermometer driver.
+- `oxrok-driver-dcttech-usbrelay` and `oxrok-driver-microchip-pickit2`,
+  both over the HID transport; the PICkit2 thereby works on macOS too.
 - `oxrok-driver-rigol-ds`: the `rigol-ds` scope driver with all 61
   Rigol and Agilent models of libsigrok; frames as analog packets
   between `FrameBegin` and `FrameEnd`, which the analog output prints

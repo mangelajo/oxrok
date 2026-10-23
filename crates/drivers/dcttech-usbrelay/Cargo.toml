@@ -1,0 +1,19 @@
+[package]
+name = "oxrok-driver-dcttech-usbrelay"
+description = "oxrok driver for the dcttech USB relay boards"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+keywords = ["relay", "sigrok", "hid"]
+categories = ["hardware-support"]
+
+[dependencies]
+oxrok-core.workspace = true
+oxrok-hid.workspace = true
+log.workspace = true
+
+[lints]
+workspace = true

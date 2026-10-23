@@ -29,6 +29,7 @@
 #![forbid(unsafe_code)]
 
 pub mod models;
+pub mod ut32x;
 
 use models::Model;
 use oxrok_core::{
@@ -64,11 +65,25 @@ const REQUEST_TIMEOUT: Duration = Duration::from_secs(1);
 /// The driver of one meter.
 pub struct SerialDmmDriver(pub &'static Model);
 
-/// Registers a driver for every supported meter.
+/// Registers a driver for every supported meter, on serial and on HID
+/// cables, and the UT32x thermometer.
 pub fn register_all(registry: &mut oxrok_core::Registry) {
-    for model in models::MODELS {
+    for model in models::MODELS.iter().chain(models::hid_models()) {
         registry.register(Box::new(SerialDmmDriver(model)));
     }
+    registry.register(Box::new(ut32x::Ut32xDriver));
+}
+
+/// Turns the `VID.PID` form libsigrok's USB drivers take into the HID
+/// cable name, so `uni-t-ut61e:conn=1a86.e008` works as in sigrok.
+fn hid_conn(conn: &str) -> String {
+    if let Some((v, p)) = conn.split_once('.')
+        && let (Ok(vid), Ok(pid)) = (u16::from_str_radix(v, 16), u16::from_str_radix(p, 16))
+        && let Some(chip) = oxrok_serial::hid::Chip::for_usb_id(vid, pid)
+    {
+        return format!("hid/{}", chip.name());
+    }
+    conn.to_owned()
 }
 
 impl Driver for SerialDmmDriver {
@@ -105,6 +120,7 @@ impl Driver for SerialDmmDriver {
         }
         let given = conn.is_some();
         let conn = match conn {
+            Some(c) if !self.0.conn.is_empty() => hid_conn(&c),
             Some(c) => c,
             None if !self.0.conn.is_empty() => self.0.conn.to_owned(),
             None => return Ok(Vec::new()),
@@ -460,6 +476,6 @@ impl Acquisition {
     }
 }
 
-fn hex(data: &[u8]) -> String {
+pub(crate) fn hex(data: &[u8]) -> String {
     data.iter().map(|b| format!("{b:02x}")).collect::<Vec<_>>().join(" ")
 }
