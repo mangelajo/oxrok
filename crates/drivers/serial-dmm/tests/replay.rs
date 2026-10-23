@@ -1,3 +1,5 @@
+#![allow(clippy::format_collect, clippy::doc_markdown)]
+
 //! The driver against hand written serial fixtures: packets built from
 //! the chipset layouts, with the byte stream starting mid packet as a
 //! real cable does.
