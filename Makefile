@@ -20,7 +20,7 @@ DIST     := dist
 # The decoders oxrok is compared with: libsigrokdecode 0.5.3.
 SRD_VERSION := 0.5.3
 SRD_URL     := https://github.com/sigrokproject/libsigrokdecode/archive/refs/tags/libsigrokdecode-$(SRD_VERSION).tar.gz
-SRD_DIR     := target/libsigrokdecode-libsigrokdecode-$(SRD_VERSION)
+SRD_DIR     := build/libsigrokdecode-libsigrokdecode-$(SRD_VERSION)
 
 # Linux builds use musl so the binary is static.
 ifneq (,$(findstring linux-gnu,$(HOST)))
@@ -63,11 +63,14 @@ build:
 	rustup target add $(TARGET)
 	$(CARGO) build --release --locked --target $(TARGET) $(if $(FEATURES),--features $(FEATURES))
 
-$(SRD_DIR):
-	mkdir -p target
-	curl -fsSL $(SRD_URL) | tar -xz -C target
+# Outside target/, which CI caches and prunes.
+$(SRD_DIR)/COPYING:
+	rm -rf $(SRD_DIR)
+	mkdir -p build
+	curl -fsSL $(SRD_URL) | tar -xz -C build
+	test -f $@
 
-decoders: $(SRD_DIR)
+decoders: $(SRD_DIR)/COPYING
 
 dist: build $(if $(FEATURES),decoders)
 	rm -rf $(STAGE)
@@ -87,4 +90,4 @@ endif
 	@echo $(DIST)/$(NAME).$(ARCHIVE)
 
 clean-dist:
-	rm -rf $(DIST)
+	rm -rf $(DIST) build

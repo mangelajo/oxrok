@@ -54,7 +54,7 @@ jobs:
           cd oxrok-*
           if [[ "${{ matrix.target }}" == *linux* ]]; then
             file oxrok
-            file oxrok | grep -q 'statically linked'
+            file oxrok | grep -qE 'statically linked|static-pie linked'
           fi
           ./oxrok --version
           ./oxrok -L > list.txt

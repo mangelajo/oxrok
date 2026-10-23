@@ -1,5 +1,6 @@
 /target
 /dist
+/build
 Cargo.lock.orig
 *.swp
 .DS_Store
