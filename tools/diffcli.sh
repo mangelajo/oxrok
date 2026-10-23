@@ -242,7 +242,10 @@ if [ $hw = 1 ]; then
         case_ "rigol show CH1" --keep-header -- -d rigol-ds -g CH1 --show
         case_ "rigol frame" -- -d rigol-ds -C CH1 --frames 1 -O analog
         case_ "rigol two frames two channels" -- -d rigol-ds -C CH1,CH2 --frames 2 -O analog
-        case_ "rigol settings" -- -d rigol-ds -c timebase=500us:triggersource=CH2:triggerslope=f -g CH1 -c vdiv=500mV:coupling=AC:probe_factor=1 --frames 1 -C CH1 -O analog
+        # sigrok-cli applies every -c to its one -g, so device and group
+        # settings are separate cases.
+        case_ "rigol device settings" -- -d rigol-ds -c timebase=500us:triggersource=CH2:triggerslope=f --frames 1 -C CH1 -O analog
+        case_ "rigol group settings" -- -d rigol-ds -g CH1 -c vdiv=500mV:coupling=AC:probe_factor=1 --frames 1 -C CH1 -O analog
     fi
     case_ "fx2lafw show" --keep-header -- -d fx2lafw --show
     case_ "fx2lafw bits 1M" -- -d fx2lafw -c samplerate=1M --samples 64 -O bits

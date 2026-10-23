@@ -136,3 +136,55 @@ fn one_live_frame_of_ch1() {
     assert!((samples[255] + 1.0 / 25.6).abs() < 1e-6);
     assert_eq!(digits, Some(2));
 }
+
+/// A session recorded from a real DS1102E (firmware 00.02.06.00.01):
+/// the readback, both channels switched on, one live frame of each.
+/// The real scope answers without line endings, writes the block
+/// header with eight length digits, and reports an `ALTERNATION`
+/// trigger slope when it is not in edge mode.
+#[test]
+fn recorded_ds1102e_session() {
+    let text = std::fs::read_to_string(format!(
+        "{}/tests/fixtures/ds1102e-frame.scpi",
+        env!("CARGO_MANIFEST_DIR")
+    ))
+    .unwrap();
+    let model = models::find("Rigol Technologies", "DS1102E").unwrap();
+    let id = HwInfo {
+        manufacturer: "Rigol Technologies".into(),
+        model: "DS1102E".into(),
+        serial_number: "DS1EB134106194".into(),
+        firmware_version: "00.02.06.00.01".into(),
+    };
+    let mut scpi = Scpi::new(Box::new(Replay::from_text(&text).unwrap()));
+    // The recording starts with the scan's identification.
+    assert_eq!(scpi.hw_id().unwrap(), id);
+    let mut dev = RigolDevice::new(model, &id, scpi);
+    dev.open().unwrap();
+    assert!(dev.channels()[0].enabled);
+    assert!(!dev.channels()[1].enabled);
+    assert_eq!(dev.get(&Key::Timebase, None).unwrap(), Value::Rational(2, 1_000_000));
+    assert_eq!(dev.get(&Key::Vdiv, Some("CH2")).unwrap(), Value::Rational(5, 1000));
+    assert!(dev.get(&Key::TriggerSlope, None).is_err());
+    assert_eq!(dev.get(&Key::TriggerLevel, None).unwrap(), Value::F64(f64::from(0.24f32)));
+    dev.enable_channel(1, true).unwrap();
+    dev.set(&Key::LimitFrames, &Value::U64(1), None).unwrap();
+    let mut session = Session::new();
+    session.add_device(Box::new(dev));
+    let mut per_channel = [Vec::new(), Vec::new()];
+    session
+        .run(|_, p| {
+            if let Packet::Analog(a) = p {
+                per_channel[a.channels[0]].extend_from_slice(&a.samples);
+            }
+            Flow::Continue
+        })
+        .unwrap();
+    let mut devices = session.into_devices();
+    devices[0].close().unwrap();
+    assert_eq!((per_channel[0].len(), per_channel[1].len()), (600, 600));
+    // Raw bytes of zero: 128 counts above the centre at 2 V/div, and at
+    // 5 mV/div with a -10 mV offset.
+    assert!((per_channel[0][0] - 10.0).abs() < 1e-4);
+    assert!((per_channel[1][0] - 0.035).abs() < 1e-5);
+}

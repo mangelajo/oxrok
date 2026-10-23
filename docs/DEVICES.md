@@ -237,9 +237,15 @@ frame runs, and runs with `timebase`, `triggersource`, `triggerslope`,
 oxrok and sigrok-cli; `tools/diffcli.sh --hw` runs those cases when
 the emulator is in that mode. The memory data source fails on the
 DS1000 series in both tools (libsigrok cannot read the sample rate
-there). The DS1000E replay test runs the same path without hardware.
-Still open: the user's real DS1102E, and the other series, for which
-`OXROK_SCPI_RECORD=FILE` captures a fixture from any run.
+there). Verified 2026-10-23 on a real DS1102E as well (firmware 00.02.06.00.01):
+`--show` at both levels and single, dual channel, two frame and
+settings runs are byte identical with sigrok-cli; its recorded session
+is a replay test next to the hand written one. The real scope answers
+without line endings, writes block headers with eight length digits
+and reports an `ALTERNATION` slope outside edge trigger mode, where
+both tools decline the `triggerslope` query. Still open: the other
+series, for which `OXROK_SCPI_RECORD=FILE` captures a fixture from any
+run.
 
 ## Raspberry Pi Pico (sigrok-pico firmware)
 

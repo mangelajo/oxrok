@@ -37,7 +37,7 @@ release may change the library API.
 - `oxrok-driver-dcttech-usbrelay` and `oxrok-driver-microchip-pickit2`,
   both over the HID transport; the PICkit2 thereby works on macOS too.
 - `oxrok-driver-rigol-ds`: the `rigol-ds` scope driver with all 61
-  Rigol and Agilent models of libsigrok; frames as analog packets
+  Rigol and Agilent models of libsigrok, verified on a DS1102E; frames as analog packets
   between `FrameBegin` and `FrameEnd`, which the analog output prints
   as `FRAME-BEGIN` and `FRAME-END` like sigrok-cli.
 - `oxrok-hid`: USB HID transport over `async-hid`, and serial over HID

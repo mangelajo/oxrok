@@ -195,10 +195,12 @@ impl RigolDevice {
             groups.push(ChannelGroup::new("LA", (first..first + DIGITAL_CHANNELS).collect()));
         }
         let mut format = model.series.format;
-        // DS1000 firmware before 0.2.4 sends bare bytes.
+        // DS1000 firmware before 0.2.4 sends bare bytes. The version
+        // string has five fields (00.02.06.00.01); the first three
+        // count, as in libsigrok.
         if model.series.protocol == Protocol::V2 {
             let parts: Vec<Option<u32>> =
-                id.firmware_version.split('.').map(|p| p.parse().ok()).collect();
+                id.firmware_version.split('.').take(3).map(|p| p.parse().ok()).collect();
             if let [Some(a), Some(b), Some(c)] = parts[..]
                 && a * 100 + b * 10 + c < 24
             {
