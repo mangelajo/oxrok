@@ -66,7 +66,7 @@ const REQUEST_TIMEOUT: Duration = Duration::from_secs(1);
 pub struct SerialDmmDriver(pub &'static Model);
 
 /// Registers a driver for every supported meter, on serial and on HID
-/// cables, and the UT32x thermometer.
+/// cables, and the `UT32x` thermometer.
 pub fn register_all(registry: &mut oxrok_core::Registry) {
     for model in models::MODELS.iter().chain(models::hid_models()) {
         registry.register(Box::new(SerialDmmDriver(model)));

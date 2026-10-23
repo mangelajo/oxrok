@@ -131,17 +131,28 @@ impl Ut32xDevice {
     }
 }
 
-/// A temperature reading from a packet, or `None` when it carries no
-/// measurement; `Err` for a packet that is not one at all.
-pub fn parse_packet(pkt: &[u8]) -> std::result::Result<Option<(usize, f32, Unit, MqFlags)>, ()> {
+/// What a received packet turned out to be.
+#[derive(Clone, Debug, PartialEq)]
+pub enum Parsed {
+    /// Not a packet of this device.
+    Invalid,
+    /// A packet without a measurement: a missing channel, an empty
+    /// memory slot.
+    Empty,
+    /// A reading: channel, value, unit, flags.
+    Reading(usize, f32, Unit, MqFlags),
+}
+
+/// Parses one packet.
+pub fn parse_packet(pkt: &[u8]) -> Parsed {
     if pkt.len() != PACKET_SIZE || pkt[17] != b'\r' || pkt[18] != b'\n' {
-        return Err(());
+        return Parsed::Invalid;
     }
     if pkt[8] != b'0' || pkt[16] != b'1' {
-        return Err(());
+        return Parsed::Invalid;
     }
     if pkt[1..5] == *b";;;;" {
-        return Ok(None);
+        return Parsed::Empty;
     }
     let mut value = 0.0f32;
     let mut negative = false;
@@ -150,12 +161,12 @@ pub fn parse_packet(pkt: &[u8]) -> std::result::Result<Option<(usize, f32, Unit,
             b':' => {}
             b';' => {
                 if negative {
-                    return Ok(None);
+                    return Parsed::Empty;
                 }
                 negative = true;
             }
             b'0'..=b'9' => value = value * 10.0 + f32::from(c - b'0'),
-            _ => return Ok(None),
+            _ => return Parsed::Empty,
         }
     }
     value /= 10.0;
@@ -174,10 +185,10 @@ pub fn parse_packet(pkt: &[u8]) -> std::result::Result<Option<(usize, f32, Unit,
         b'2' | b'3' => (2, MqFlags::RELATIVE),
         _ => {
             log::error!("Unknown channel {:#04x}.", pkt[13]);
-            return Ok(None);
+            return Parsed::Empty;
         }
     };
-    Ok(Some((channel, value, unit, flags)))
+    Parsed::Reading(channel, value, unit, flags)
 }
 
 impl Device for Ut32xDevice {
@@ -342,8 +353,8 @@ fn run(
             let pkt: Vec<u8> = buf.drain(..end + 2).collect();
             let parsed = parse_packet(&pkt);
             log::debug!("UT32x packet {}: {parsed:?}", super::hex(&pkt));
-            if let Ok(reading) = parsed {
-                if let Some((ch, value, unit, flags)) = reading
+            if parsed != Parsed::Invalid {
+                if let Parsed::Reading(ch, value, unit, flags) = parsed
                     && enabled.get(ch).copied().unwrap_or(false)
                 {
                     let data = AnalogData {
@@ -385,9 +396,9 @@ mod tests {
 
     /// A packet with the four temperature characters, the unit digit,
     /// the channel digit and the two fixed markers.
-    fn packet(temp: &[u8; 4], unit: u8, channel: u8, marker16: u8) -> Vec<u8> {
+    fn packet(temp: [u8; 4], unit: u8, channel: u8, marker16: u8) -> Vec<u8> {
         let mut p = vec![0u8];
-        p.extend_from_slice(temp);
+        p.extend_from_slice(&temp);
         p.push(unit);
         p.extend(b"00");
         p.push(b'0');
