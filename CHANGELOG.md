@@ -33,7 +33,8 @@ release may change the library API.
 - `oxrok-hid`: USB HID transport over `async-hid`, and serial over HID
   cables in `oxrok-serial` (Brymen BU-86X, WCH CH9325, SiLabs CP2110,
   Victor), named `hid[/CHIP][/sn=SERIAL]` as in sigrok. Meters that
-  come with such a cable scan without `conn=`.
+  come with such a cable scan without `conn=`. Verified against
+  sigrok-cli with a Pico emulating the three cables.
 - Trigger extras in the shared model and the `-t` grammar: occurrence
   counts (`D0=r*5`, consecutive `D0=r*5c`), durations (`D0=1>100`,
   `D0=1>50us`), value ranges on a channel group (`D0-D2=3..5`,

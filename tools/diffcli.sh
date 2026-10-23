@@ -197,6 +197,25 @@ if [ $hw = 1 ]; then
     gen --cmd "EMIT 200 60 1720354d5b617f8297a0b0c0d4e0"
     case_ "serial dmm fs9721" -- -d uni-t-ut60a-ser:conn=$DMMPORT:serialcomm=921600/8n1 --samples 2
     gen --cmd "EMIT 0 0"
+    # HID cables: the Pico emulator (pico/hidcable in the LogicPort
+    # driver tree) switches cable type on its serial port and reboots,
+    # so each mode change waits for the new device. Skipped when the
+    # emulator's port is absent.
+    CABLE=${CABLE:-$(dirname "$0")/../../sigrok-intronix-driver/pico/hidcable/cable.sh}
+    if [ -x "$CABLE" ] && ls /dev/cu.usbmodemHIDCABLE* >/dev/null 2>&1; then
+        cable() { "$CABLE" "$@" > /dev/null 2>&1; }
+        mode() { cable "MODE $1"; sleep 6; }
+        mode bu86x
+        cable "PACKET 000001a0dbf8e47c01007cbebf0004008686868600000000" "PERIOD 0" "SAVE"
+        case_ "hid dmm bm86x" -- -d brymen-bm86x --samples 2
+        mode ch9325
+        cable "PACKET 3131323334353b3030303a300d0a" "PERIOD 200" "SAVE"
+        case_ "hid dmm ut61e on ch9325" -- -d uni-t-ut61e-ser:conn=hid/ch9325 --samples 2
+        mode victor
+        cable "PACKET 2b31323334203130000080000d0a" "PERIOD 300" "SAVE"
+        case_ "hid dmm victor" -- -d victor-dmm --samples 2
+        mode bu86x
+    fi
     case_ "fx2lafw show" --keep-header -- -d fx2lafw --show
     case_ "fx2lafw bits 1M" -- -d fx2lafw -c samplerate=1M --samples 64 -O bits
     case_ "fx2lafw hex 24M" -- -d fx2lafw -c samplerate=24M --samples 1024 -O hex

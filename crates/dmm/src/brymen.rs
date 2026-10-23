@@ -91,17 +91,14 @@ fn read_text(
             t.chars.push('.');
             t.digits = 0;
         }
-        let c = digit(byte);
-        if c.is_none() {
-            log::warn!("Unknown encoding for digit: {byte:#04x}.");
-        }
-        match c {
+        match digit(byte) {
+            Some('\0') => {}
             Some(c @ ('C' | 'F')) if pos == unit_pos => t.temp_unit = Some(c),
             Some(c) => {
                 t.chars.push(c);
                 t.digits += 1;
             }
-            None => {}
+            None => log::warn!("Unknown encoding for digit: {byte:#04x}."),
         }
         if !point_first && point(pos, byte) {
             t.chars.push('.');
@@ -137,7 +134,6 @@ fn bm52x_digit(b: u8) -> Option<char> {
         0x00 => '\0',
         _ => return None,
     })
-    .filter(|c| *c != '\0')
 }
 
 fn bm52x_point(pos: usize, byte: u8) -> bool {
@@ -340,7 +336,6 @@ fn bm86x_digit(b: u8) -> Option<char> {
         0x00 => '\0',
         _ => return None,
     })
-    .filter(|c| *c != '\0')
 }
 
 /// The BM86x keeps a position's decimal point in the next byte.

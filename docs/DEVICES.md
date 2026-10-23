@@ -117,22 +117,17 @@ Linux the user needs read and write access to the `/dev/hidraw*` node
 (a udev rule for the cable's USB id). Meters that come with a HID cable
 scan without `conn=`; an unplugged default cable is simply not found.
 
-Unverified: no HID cable was on the bench. The chip framing, the
-Victor unscrambling and both Brymen parsers have tests written from the
-C implementations and the Brymen protocol document; the BM86x request
-and answer also run through the driver in a replay test. A
-microcontroller that enumerates as one of these cables and plays a
-meter would close the gap, as the ESP32 does for serial meters.
-
-Verification without a meter: the parsers have tests built from the
-packet layouts, the driver has replay tests on hand written serial
-fixtures (`OXROK_SERIAL_RECORD=FILE` records a real session into the
-same format), and the ESP32 generator plays a meter on its own serial
-port (`EMIT <ms> <seconds> <hex>`, kept in flash across the reset that
-opening the port causes). Verified 2026-10-23 that way: the UT61E and
-UT60A streams give the same readings through oxrok and sigrok-cli
-(`tools/diffcli.sh --hw`, cases `serial dmm`). The ESP32 port runs at
-921600 baud, so those runs pass `serialcomm=921600/8n1`.
+Verified 2026-10-23 with a Raspberry Pi Pico running the cable emulator
+in `pico/hidcable` of the LogicPort driver tree: it enumerates as the
+BU-86X, the CH9325 or the Victor cable (`MODE bu86x|ch9325|victor` on
+its USB serial port, `PACKET hex`, `PERIOD ms`, `SAVE`; `cable.sh`
+sends the commands) and plays a meter packet. `brymen-bm86x` on the
+BU-86X, `uni-t-ut61e-ser:conn=hid/ch9325` and `victor-dmm` give the same
+readings through oxrok and sigrok-cli; `tools/diffcli.sh --hw` runs
+the three cases. The CP2110 has no emulation yet. sigrok-cli needed two
+small fixes in libsigrok's `serial_hid.c` to work on this macOS at all
+(the `DevSrvsID:` paths of current hidapi, and a double conversion of
+found paths); they are applied in the local build only.
 
 ## Rigol and Agilent oscilloscopes
 

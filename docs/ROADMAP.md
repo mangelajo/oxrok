@@ -40,12 +40,9 @@ Hardware checks not yet done, with what each needs:
   hardware check (`D0=1*2` on the pulse train) is not in the bench yet.
 - Frequency counter above 1 MHz, up to the 300 MHz the vendor states:
   needs a faster source than the ESP32's LEDC output.
-- HID cables: no BU-86X, CH9325, CP2110 or Victor cable was on the
-  bench, so the chip framing and the Brymen parsers are tested only
-  against the C implementations. A microcontroller with native USB
-  (an ESP32-S2/S3 or RP2040) enumerating with one of the cables' USB
-  ids and replaying a meter would verify them the way the ESP32 does
-  for serial meters; the `EMIT` idea carries over.
+- HID cables: the BU-86X, CH9325 and Victor paths are verified with
+  the Pico emulator (see `docs/DEVICES.md`); the CP2110 framing and
+  feature reports are tested only against the C code.
 - `rigol-ds` on the DS1102E: plug the scope in, run
   `oxrok -d rigol-ds --show` and `oxrok -d rigol-ds --frames 1 -O analog`
   with `OXROK_SCPI_RECORD` set, compare with sigrok-cli, and turn the
