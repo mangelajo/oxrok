@@ -2,6 +2,14 @@
 
 ## Intronix LogicPort LA1034
 
+Driver `intronix-logicport`. 34 channels (D0-D31, CLK1, CLK2), 2048
+sample entries, 1 kHz to 500 MHz timing mode, state mode on CLK1 or
+CLK2, run length compression up to 200 MHz, two hardware trigger
+levels, an input threshold of -6 to 6 V in 50 mV steps. An FT245BL
+FIFO bridge (`0403:dc48`) in front of an SRAM based Cyclone FPGA that
+the host configures on first use; the protocol and register map are in
+the driver's `protocol.rs`.
+
 Firmware: the vendor's `LogicPort.ccf`, unmodified, installed as
 `intronix-logicport.ccf` in one of the firmware directories (first hit
 wins):
@@ -41,7 +49,7 @@ Bench: `oxrok-hil` runs the hardware checks (levels, threshold, timebase
 up to 500 MHz, triggers, counts, durations, value ranges, combine modes,
 sample points, inversion, the frequency counter, compression, frames,
 all byte lanes) against a LogicPort wired to the ESP32 signal generator
-from the libsigrok driver repository. `oxrok-hil -k trigger` runs a
+in `hil/esp32-siggen`. `oxrok-hil -k trigger` runs a
 subset, `LOGICPORT_CONN` picks a unit, `SIGGEN_PORT` the serial port.
 `oxrok-hil --clk HZ`, `--set MASK`, `--cmd LINE` and `--delay MS` only
 drive the generator, for captures by hand. Opening the serial port
@@ -99,7 +107,7 @@ Some cables are USB HID devices rather than serial ports: the Brymen
 BU-86X infrared adapter (`brymen-bm52x`, `brymen-bm82x`,
 `brymen-bm86x`), the Victor 70C and 86C cable (`victor-dmm`), and the
 WCH CH9325 and Silicon Labs CP2110 UART bridges that other meters'
-cables use. the `hid` module talks to them through `async-hid` (IOHIDManager
+cables use. The `hid` module talks to them through `async-hid` (IOHIDManager
 on macOS, hidraw on Linux, Win32 HID on Windows, no C code), and
 the `serial` module wraps each chip's report framing as a port, so the
 meter drivers see a byte stream as with a serial cable. The port name
@@ -168,7 +176,8 @@ libsigrok reaches the PICkit2 with raw USB transfers, which macOS does
 not allow on a HID; oxrok speaks HID reports instead, so it works on
 every platform. Both drivers were verified against the Pico emulator
 (`MODE usbrelay`, `MODE pickit2`, which plays a counter on the three
-pins; firmware in `hil/pico-hidcable`); the user's real PICkit2 is the next check.
+pins; firmware in `hil/pico-hidcable`). A real PICkit2 has not been
+tried yet.
 
 ## Raspberry Pi Pico (sigrok-pico firmware)
 
@@ -246,70 +255,6 @@ and reports an `ALTERNATION` slope outside edge trigger mode, where
 both tools decline the `triggerslope` query. Still open: the other
 series, for which `OXROK_SCPI_RECORD=FILE` captures a fixture from any
 run.
-
-## Raspberry Pi Pico (sigrok-pico firmware)
-
-A Pico running the sigrok-pico firmware is a 21 channel logic analyzer
-with 3 analog inputs over its USB serial port, driver `raspberrypi-pico`.
-`conn=` is required; the Pico shows up as a CDC port (`/dev/cu.usbmodem*`
-on macOS, `/dev/ttyACM*` on Linux):
-
-```
-oxrok -d raspberrypi-pico:conn=/dev/ttyACM0 -c samplerate=1M -C D2,D3,D4 --samples 100 -O bits
-oxrok -d raspberrypi-pico:conn=/dev/ttyACM0 -c samplerate=100k -C A0,D2 --samples 50 -O csv
-oxrok -d raspberrypi-pico:conn=/dev/ttyACM0 -c samplerate=1M -C D2,D3 -t D2=r --samples 1000 -O bits
-```
-
-Digital channels are `D2` to `D22` (the board's GPIO numbers) and must
-be enabled from D2 up without gaps; analog `A0` to `A2` are GPIO 26 to
-28 scaled to volts. The firmware takes any sample rate and the driver
-rounds it to a common divisor when analog and digital run together, as
-libsigrok does. Triggers run on the host (one stage, digital channels,
-with `captureratio` of pre-trigger samples); the device streams until
-told to stop. Rates the firmware cannot do abort the capture, the same
-way in both tools (one analog channel at 1 MHz, for example).
-
-Verified 2026-10-23 on a Pico with `pico_baseline.uf2`: `--show`, bits,
-hex, ascii, csv with and without trigger marks, analog, mixed and
-triggered captures are byte identical between oxrok and sigrok-cli;
-two recorded sessions are the replay tests. Not yet exercised: a real
-signal on the inputs (a wire from the ESP32 to GPIO 2 would do) and the
-larger digital-only firmware variants.
-
-## Rigol and Agilent oscilloscopes
-
-The `rigol-ds` driver covers the same 61 models as libsigrok's: Rigol
-VS5000, DS1000 (DS1052E, DS1102E, DS1152E and the D variants with the
-logic pod), DS2000 and DS2000A/MSO2000A, DS1000Z and MSO1000Z, DS4000,
-MSO5000, and the Agilent DSO1000A/B and MSO7034A. It speaks SCPI over
-the `scpi` module, which carries USBTMC (the USB port on the scope), raw TCP,
-Rigol's length prefixed TCP and serial ports:
-
-```
-oxrok -d rigol-ds --show                           # any USBTMC scope
-oxrok -d rigol-ds:conn=usbtmc/1.5 --frames 1 -O analog
-oxrok -d rigol-ds:conn=tcp-rigol/192.168.1.20/5555 -c timebase=1ms -C CH1 --frames 2 -O csv
-```
-
-Options follow sigrok: `timebase`, `triggersource`, `triggerslope`,
-`triggerlevel`, `horiz_triggerpos`, `data_source` (`Live`, `Memory`,
-`Segmented` as the series allows) and `limit_frames`; per analog channel
-group (`-g CH1`) `vdiv`, `coupling` and `probe_factor`. Every setting is
-written to the scope at once and the current values are read back when
-the device opens. A capture downloads each enabled channel once per
-frame, scaled to volts, between `FRAME-BEGIN` and `FRAME-END`; the
-sample rate is the frame length over the screen width for `Live`
-and `:WAV:XINC?` for the memory sources.
-
-One difference from libsigrok on purpose: `horiz_triggerpos` is
-converted to seconds with the number of horizontal divisions, where
-libsigrok multiplies by the number of timebases in its table.
-
-Verification: the DS1000E path (readback, one live frame, key unlock
-on close) runs in a replay test against a hand written SCPI fixture
-with the exact command sequence; the user's DS1102E is the bench device
-for the real run, which has not happened yet. The other series have
-no recordings; `OXROK_SCPI_RECORD=FILE` captures one from any run.
 
 ## fx2lafw devices
 

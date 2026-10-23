@@ -17,7 +17,7 @@
 //!
 //! Drivers talk to a [`Port`]. [`open`] gives a real one and, with
 //! `OXROK_SERIAL_RECORD=FILE` set, records everything to a fixture that
-//! [`Replay`] plays back in tests without the hardware.
+//! [`record::Replay`] plays back in tests without the hardware.
 //!
 //! A fixture is a text file, one call per line:
 //!

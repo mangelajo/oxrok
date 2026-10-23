@@ -15,6 +15,73 @@
 //! segment (upper 16 bits, selected by a separate command) and an
 //! offset.
 
+// FPGA images and register map, as worked out from USB captures of the
+// vendor software.
+//
+// | Index | Image | Used for |
+// |---|---|---|
+// | 0 | state-after | state mode, `sample_point=after` |
+// | 1-4 | state-before-clk{1,2}-{rise,fall} | state mode, `sample_point=before` |
+// | 5 | state-on | state mode, `sample_point=on` |
+// | 6 | timing-ddr | 500 MHz |
+// | 7 | timing-sdr | 1 kHz to 250 MHz |
+//
+// Control block at `0x100000`: status (read; bit 0 done, bit 1 memory
+// wrapped, bit 5 triggered, bit 6 pre-filled), configure control (write;
+// **only ever written with 0**, which releases the FPGA configuration
+// before a reload), arm `+2`, run `+3`, pre and post trigger depth `+4`
+// and `+6` (16 bit), threshold DAC `+8` (16 bit), end pre-fill `+a`
+// (write) and unfilled count (read), end post-fill `+b`, force trigger
+// `+c` (write 1; unused), trigger combine `+d` (0: none, 1: level A, 2: B,
+// 3: A or B, 4: A and B, 5: A then B), image id `+f`. Nine bytes read from
+// `+1` are the wire status (seen high, seen low per input; unused).
+//
+// Trigger levels A at `0x200000` and B at `0x400000`: pattern mask `+00`,
+// pattern value `+05`, count high `+0a`, count low `+0e` (20 bit), value
+// bit order `+12` (1: channel k weighs 2^k), condition `+14`, counter
+// source `+16`, counter mode `+17`, consecutive `+18`, prequalify `+19`
+// (unused), value mask `+1a`, value low `+1f`, value high `+24`, rising
+// mask `+29`, falling mask `+2e`. Masks are 5 bytes, one bit per channel.
+// The condition is a pattern code (1: pattern true, 2: false) plus a value
+// code (0x0c: value within the bounds, 0x10: outside; the bounds are
+// scattered onto the group's channel bits). Counter source 3 counts edges,
+// 1 the pattern becoming true, 0 the sample clock. Counter mode 1 fires
+// when the count reaches count high plus one; mode 2 fires once the
+// condition has held for more than count low ticks (a tick is a sample, or
+// two at 500 MHz). Mode 2 needs the consecutive flag, else the counter
+// keeps counting across gaps in the condition, and marks the trigger one
+// sample after the pipeline delay below. Mode 3 (a duration window) is not
+// used. The value registers are written only when a value term is in use,
+// so the default register stream is the one the replay fixtures hold.
+//
+// Clocking at `0x1000000`: clock mode (write; bit 2 CLK1, bit 1 CLK2, bit
+// 0 falling edge, bit 4 qualifier off, bit 3 qualifier active low, neither
+// for active high) or trigger position (read), channel config `+1`,
+// compression on `+2`, compression mask `+3` (5 bytes), invert mask `+8`
+// (5 bytes; the device inverts those inputs for the trigger and in the
+// stored data). Timebase: prescaler `0x20000000` and 1-2-5 step
+// `0x20000001`, from the rate table in `protocol.rs`. Frequency counter at
+// `0x40000000`: write the input (D0..D31 by index, CLK1 0x20, CLK2 0x21),
+// read 0 there when a measurement is ready, then the 32 bit value at `+1`
+// in units of 10 Hz. The gate free runs, so the first ready value after
+// selecting an input can still be the previous input's; the driver takes
+// the second. Init counter `0x40000005` increments for about 250 ms after
+// configuration.
+//
+// The FPGA image follows the settings: 7 for timing mode up to 250 MHz, 6
+// for 500 MHz, and in state mode 5 to sample on the clock edge, 0 for 2.5
+// ns after it, 1 to 4 for 2.5 ns before a CLK1 rising, CLK2 rising, CLK1
+// falling or CLK2 falling edge, taking an inverted clock input into
+// account.
+//
+// Sample memory at `0x2000000`: write pointer `+0` (bank B `+100`), four
+// data lanes from `+1000` with a stride of `0x1000`, bank B lanes from
+// `+5000`, flags lane at `+9000`. 2048 entries of 40 bits: D0-D31 in the
+// lanes, CLK1 and CLK2 in flag bits 1 and 2 (bank B shifted by 4). With
+// compression an entry with flag bit 3 set is a count record: the lanes
+// and the low three flag bits form a 35 bit count of extra sample periods
+// without a transition.
+
 use crate::core::{Error, Result};
 use crate::drivers::logicport::firmware::{self, Image};
 use crate::drivers::logicport::readout::{

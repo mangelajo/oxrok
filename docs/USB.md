@@ -1,6 +1,6 @@
 # USB transport
 
-Drivers talk to USB through the `Transport` trait in `oxrok-usb`:
+Drivers talk to USB through the `Transport` trait of the `usb` module:
 control and bulk transfers with timeouts, interface claims, resets and
 the packet size of an endpoint. Two backends implement it, selected by
 cargo feature. The drivers never see which one is in use.
@@ -77,7 +77,7 @@ on time, so a replay may poll more or fewer times than the recording:
 a read identical to the one just answered is answered again, and
 leftover identical reads in the recording are skipped.
 
-`OXROK_USB_RECORD=FILE` makes `oxrok_usb::open` record every session
+`OXROK_USB_RECORD=FILE` makes `usb::open` record every session
 and write the fixture when the device is closed, with any program
 that uses the drivers:
 
@@ -88,19 +88,16 @@ OXROK_USB_RECORD=capture.txt oxrok -d intronix-logicport -c samplerate=10M --sam
 To record, wrap the transport before handing it to the driver:
 
 ```rust
-let (recorder, handle) = Recorder::with_handle(oxrok_usb::open(&info)?);
+let (recorder, handle) = Recorder::with_handle(oxrok::usb::open(&info)?);
 let ftdi = Ftdi::open(Box::new(recorder), Port::A)?;
 // ... drive it ...
 std::fs::write("session.txt", handle.fixture().to_text())?;
 ```
 
-`cargo run --example ftdi_probe -- [conn] [--record FILE]`
-does this for the FTDI layer: it runs every request that drives no pin
-and writes the fixture.
 
 ## FTDI
 
-`oxrok-ftdi` speaks the FT232/FT245 vendor protocol over a transport:
+The `ftdi` module speaks the FT232/FT245 vendor protocol over a transport:
 reset and purge, latency timer, baud rate (which also clocks the
 bit-bang modes), line settings, modem control and status, the bit modes,
 pin readback and EEPROM reads. Bulk reads strip the two status bytes
@@ -113,8 +110,8 @@ their own codes, then 14 integer bits and a 3 bit code for the eighths.
 
 ## Troubleshooting
 
-- Linux: without a udev rule the device is root only. Phase 7 ships
-  rules; until then `sudo` or a rule with `MODE="0666"` for the vendor
+- Linux: without a udev rule the device is root only. Packaging will
+  ship rules (`docs/ROADMAP.md`); until then `sudo` or a rule with `MODE="0666"` for the vendor
   and product id. A kernel driver (`ftdi_sio` for FTDI devices with a
   known product id) is detached when the interface is claimed, with
   both backends.

@@ -10,7 +10,7 @@
 //!
 //! The interface is blocking, like the serial and USB transports, and
 //! follows the hidapi conventions that the chip adapters in
-//! `oxrok-serial` were written against: the first byte of an outgoing
+//! the `serial` module were written against: the first byte of an outgoing
 //! report is its report id, 0 when the device does not number its
 //! reports, and an incoming report carries its id in the first byte
 //! only when the device numbers them.

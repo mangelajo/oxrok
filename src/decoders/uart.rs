@@ -131,7 +131,7 @@ pub static INFO: DecoderInfo = DecoderInfo {
     name: "UART",
     longname: "Universal Asynchronous Receiver/Transmitter",
     desc: "Asynchronous, serial bus.",
-    license: "MIT OR Apache-2.0",
+    license: "gplv2+",
     inputs: &["logic"],
     outputs: &["uart"],
     tags: &["Embedded/industrial"],

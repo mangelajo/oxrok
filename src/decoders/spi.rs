@@ -26,7 +26,7 @@ pub static INFO: DecoderInfo = DecoderInfo {
     name: "SPI",
     longname: "Serial Peripheral Interface",
     desc: "Full-duplex, synchronous, serial bus.",
-    license: "MIT OR Apache-2.0",
+    license: "gplv2+",
     inputs: &["logic"],
     outputs: &["spi"],
     tags: &["Embedded/industrial"],

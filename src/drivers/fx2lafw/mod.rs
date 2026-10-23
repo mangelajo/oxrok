@@ -13,7 +13,7 @@
 //! version, `0xb1` start acquisition with a flags byte and a sample
 //! delay, `0xb2` chip revision. Devices without the firmware in EEPROM
 //! enumerate as the bare chip or the vendor's product; the firmware is
-//! uploaded over [`oxrok_ezusb`] and the device renumerates.
+//! uploaded over [`crate::ezusb`] and the device renumerates.
 
 #![forbid(unsafe_code)]
 

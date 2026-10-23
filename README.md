@@ -1,7 +1,9 @@
 # oxrok
 
-A sigrok compatible logic analyzer stack in Rust: a library, drivers and
-a command line tool. No C libraries, no Python runtime, one `cargo build`.
+An experimental sigrok compatible logic analyzer stack in Rust: a
+library, drivers and a command line tool. No C libraries, no Python
+runtime unless the optional `python` feature is enabled for
+libsigrokdecode's decoders, one `cargo build`.
 
 oxrok is not part of the sigrok project. It keeps sigrok's file formats,
 command line flags and decoder ids so existing tools, scripts and habits
@@ -99,7 +101,7 @@ what the hardware offers and its vendor software exposes. The software
 trigger behind the demo and fx2lafw devices takes counts and durations.
 These forms, the LogicPort's clock qualifier, setup and hold sampling
 points, input inversion and frequency counter are not in sigrok; see
-`docs/CLI.md` and `docs/LOGICPORT.md`.
+`docs/CLI.md` and `docs/DEVICES.md`.
 
 ## Compatibility with sigrok
 

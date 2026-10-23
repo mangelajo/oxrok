@@ -23,7 +23,7 @@ pub static INFO: DecoderInfo = DecoderInfo {
     name: "I2C",
     longname: "Inter-Integrated Circuit",
     desc: "Two-wire, multi-master, serial bus.",
-    license: "MIT OR Apache-2.0",
+    license: "gplv2+",
     inputs: &["logic"],
     outputs: &["i2c"],
     tags: &["Embedded/industrial"],

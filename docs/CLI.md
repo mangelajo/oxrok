@@ -51,6 +51,11 @@ Deliberate, and kept small:
   durations; the LogicPort takes all of them with two stages, see
   `docs/DEVICES.md`. sigrok-cli rejects these forms. `>`, `;`, `|` and
   `&` need quoting in a shell.
+- `rigol-ds` converts `horiz_triggerpos` to seconds with the number
+  of horizontal divisions; libsigrok multiplies by the number of
+  timebases in its table.
+- `microchip-pickit2` talks HID reports instead of raw USB, so it also
+  works on macOS, where libsigrok cannot claim the device.
 - The demo device honours triggers (sigrok's ignores them): samples
   before the trigger are dropped, except the capture ratio's share of
   the sample limit, and the trigger is marked in the output.
@@ -79,6 +84,5 @@ Deliberate, and kept small:
   `scale` options of the `csv` output.
 - The `csv` input and the other long tail input modules (ChronoVu LA8,
   STF, Trace32, ISF, WAV, LogicPort .lpf).
-- The hardware drivers beyond the LogicPort, fx2lafw and the serial
-  multimeters: SCPI instruments and the USB logic analyzers come next
-  (`docs/ROADMAP.md`).
+- The other libsigrok hardware drivers: the USB logic analyzers come
+  next, the rest after them (`docs/ROADMAP.md`).

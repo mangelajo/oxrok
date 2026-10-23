@@ -8,7 +8,7 @@
 //! levels with patterns and edges, and an adjustable input threshold.
 //!
 //! A port of the author's libsigrok driver; the protocol is summarised
-//! in `docs/LOGICPORT.md`. The FPGA bitstreams come from the vendor's
+//! in the `protocol` module. The FPGA bitstreams come from the vendor's
 //! `LogicPort.ccf`, see [`firmware`].
 
 #![forbid(unsafe_code)]

@@ -1,6 +1,6 @@
 [package]
 name = "oxrok"
-description = "A sigrok compatible logic analyzer, multimeter and oscilloscope stack in Rust: library and command line tool"
+description = "An experimental sigrok compatible logic analyzer, multimeter and oscilloscope stack in Rust: library and command line tool"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

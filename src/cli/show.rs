@@ -14,7 +14,6 @@ use std::fmt::Write as _;
 pub fn version(registry: &Registry) {
     println!("oxrok {}\n", oxrok::core::VERSION);
     println!("Libraries and features:");
-    println!("- oxrok-core {}", oxrok::core::VERSION);
     println!(
         "- drivers: {}",
         registry.drivers().map(oxrok::core::Driver::id).collect::<Vec<_>>().join(", ")

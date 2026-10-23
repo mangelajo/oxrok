@@ -437,7 +437,7 @@ const HID_MODELS: &[(&str, &str, &str, &str)] = &[
 /// The cable of the HID twins.
 pub const UT_D04_CONN: &str = "hid/ch9325";
 
-/// The meters on the UT-D04 HID cable, built once from [`HID_MODELS`].
+/// The meters on the UT-D04 HID cable, built once from `HID_MODELS`.
 pub fn hid_models() -> &'static [Model] {
     static TABLE: std::sync::OnceLock<Vec<Model>> = std::sync::OnceLock::new();
     TABLE.get_or_init(|| {
