@@ -6,6 +6,11 @@ release may change the library API.
 
 ## [Unreleased]
 
+## [0.1.0-alpha.1] - 2026-10-23
+
+First publication, to claim the name on crates.io. Experimental; see
+the README for what has been verified on hardware.
+
 ### Changed
 
 - The LogicPort register map moved from `docs/LOGICPORT.md` into the
