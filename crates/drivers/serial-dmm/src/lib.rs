@@ -118,6 +118,9 @@ impl Driver for SerialDmmDriver {
             }
             Err(e) => return Err(e),
         };
+        if let Some(after_open) = self.0.after_open {
+            after_open(port.as_mut())?;
+        }
         let conn = port.name().to_owned();
         log::info!("Probing serial port {conn}.");
         let found = detect(port.as_mut(), &self.0.protocol, DETECT_TIMEOUT)?;
@@ -164,11 +167,8 @@ pub fn detect(port: &mut dyn Port, protocol: &Protocol, timeout: Duration) -> Re
             continue;
         }
         buf.push(byte[0]);
-        if buf.len() >= protocol.packet_size {
-            let start = buf.len() - protocol.packet_size;
-            if (protocol.valid)(&buf[start..]) {
-                return Ok(true);
-            }
+        if protocol.find_packet(&buf).is_some() {
+            return Ok(true);
         }
         if buf.len() >= BUF_SIZE {
             buf.drain(..BUF_SIZE / 2);
@@ -414,12 +414,9 @@ impl Acquisition {
             }
             buf.extend_from_slice(&chunk[..n]);
             let mut pos = 0;
-            while buf.len() - pos >= p.packet_size {
-                let packet = &buf[pos..pos + p.packet_size];
-                if !(p.valid)(packet) {
-                    pos += 1;
-                    continue;
-                }
+            while let Some((skip, len)) = p.find_packet(&buf[pos..]) {
+                pos += skip;
+                let packet = &buf[pos..pos + len];
                 log::debug!("DMM packet: {}", hex(packet));
                 let mut sent = false;
                 for r in (p.parse)(packet) {
@@ -445,7 +442,7 @@ impl Acquisition {
                         return Ok(());
                     }
                 }
-                pos += p.packet_size;
+                pos += len;
                 if let Some(req) = p.request {
                     if !request_delay.is_zero() {
                         std::thread::sleep(request_delay);

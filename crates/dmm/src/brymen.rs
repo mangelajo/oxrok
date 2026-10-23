@@ -685,3 +685,202 @@ mod tests {
         assert!(!bm86x_valid(&[0u8; 24]));
     }
 }
+
+// BM85x: a framed text protocol over the serial cable, see
+// libsigrok/src/dmm/bm85x.c, Copyright (C) 2019 Gerhard Sittig.
+
+/// The shortest BM85x packet: a complete header.
+pub const BM85X_MIN_SIZE: usize = 4;
+/// The request for a reading: DLE STX, command 0 with two zero
+/// arguments, their XOR checksum, DLE ETX.
+pub const BM85X_REQUEST: &[u8] = &[0x10, 0x02, 0x00, 0x00, 0x00, 0x00, 0x10, 0x03];
+
+const BM85X_HEAD: usize = 4;
+const BM85X_TAIL: usize = 3;
+const BM85X_DATA_MAX: usize = 15;
+const BM85X_BFUNC: usize = 4;
+
+/// Frames a BM85x packet at the start of `buf`: header, payload of the
+/// announced length, checksum and trailer.
+pub fn bm85x_frame(buf: &[u8]) -> crate::Validity {
+    use crate::Validity::{Invalid, Need, Valid};
+    if buf.len() < BM85X_HEAD {
+        return Need;
+    }
+    if buf[0] != 0x10 || buf[1] != 0x02 {
+        return Invalid;
+    }
+    // Command 1 happens with OL pending at connect time; it is a
+    // reading too.
+    if buf[2] != 0 && buf[2] != 1 {
+        return Invalid;
+    }
+    let plen = usize::from(buf[3]);
+    if plen > BM85X_DATA_MAX {
+        return Invalid;
+    }
+    let total = BM85X_HEAD + plen + BM85X_TAIL;
+    if buf.len() < total {
+        return Need;
+    }
+    let crc = buf[BM85X_HEAD..BM85X_HEAD + plen].iter().fold(0u8, |a, b| a ^ b);
+    let tail = &buf[BM85X_HEAD + plen..total];
+    if tail != [crc, 0x10, 0x03] {
+        return Invalid;
+    }
+    Valid(total)
+}
+
+/// The reading in a framed BM85x packet.
+#[allow(clippy::similar_names)]
+pub fn bm85x_parse(buf: &[u8]) -> Option<Reading> {
+    let crate::Validity::Valid(total) = bm85x_frame(buf) else {
+        return None;
+    };
+    let payload = &buf[BM85X_HEAD..total - BM85X_TAIL];
+    if payload.len() < BM85X_BFUNC {
+        return None;
+    }
+    let bfunc = &payload[..BM85X_BFUNC];
+    let mut text = String::from_utf8_lossy(&payload[BM85X_BFUNC..]).into_owned();
+    // The function bits; reserved ones must be clear.
+    let is_batt = bfunc[3] & 0x80 != 0;
+    if bfunc[3] & 0x7f != 0 || bfunc[2] != 0 || bfunc[1] & 0xd0 != 0 {
+        return None;
+    }
+    let is_dbm = bfunc[1] & 0x20 != 0;
+    let is_perc = bfunc[1] & 0x08 != 0;
+    let is_hz = bfunc[1] & 0x04 != 0;
+    let is_amp = bfunc[1] & 0x02 != 0;
+    let is_beep = bfunc[1] & 0x01 != 0;
+    let is_ohm = bfunc[0] & 0x80 != 0;
+    let is_temp_f = bfunc[0] & 0x40 != 0;
+    let is_temp_c = bfunc[0] & 0x20 != 0;
+    let is_diode = bfunc[0] & 0x10 != 0;
+    let is_cap = bfunc[0] & 0x08 != 0;
+    let is_volt = bfunc[0] & 0x04 != 0;
+    let is_dc = bfunc[0] & 0x02 != 0;
+    let is_ac = bfunc[0] & 0x01 != 0;
+    if is_batt {
+        log::warn!("Low battery!");
+    }
+    if is_dbm && is_ohm {
+        // The dBm reference resistance comes as " 0.600 E" and the like.
+        text = text.strip_prefix(" 0.")?.to_owned();
+        let end = text.find(" E")?;
+        text.truncate(end);
+    }
+    if is_temp_f || is_temp_c {
+        let unit = if is_temp_f { 'F' } else { 'C' };
+        let pos = text.find(unit)?;
+        text.replace_range(pos..=pos, " ");
+    }
+    let (mut value, mut digits) = if text.contains("+OL") {
+        (f64::INFINITY, 0)
+    } else if text.contains("-OL") {
+        (f64::NEG_INFINITY, 0)
+    } else if text.contains("OL") {
+        (f64::INFINITY, 0)
+    } else {
+        let compact: String = text.chars().filter(|c| *c != ' ').collect();
+        let v: f64 = compact.parse().ok()?;
+        let digits = compact.find('.').map_or(0, |p| (compact.len() - p - 1) as i32);
+        (v, digits)
+    };
+    let mut r = Reading::new(0.0, Mq::Gain, Unit::Unitless, 0);
+    if is_volt {
+        (r.mq, r.unit) = (Mq::Voltage, Unit::Volt);
+    }
+    if is_amp {
+        (r.mq, r.unit) = (Mq::Current, Unit::Ampere);
+    }
+    if is_ohm {
+        r.mq = if is_beep && !is_dbm { Mq::Continuity } else { Mq::Resistance };
+        r.unit = Unit::Ohm;
+    }
+    if is_hz {
+        (r.mq, r.unit) = (Mq::Frequency, Unit::Hertz);
+    }
+    if is_perc {
+        (r.mq, r.unit) = (Mq::DutyCycle, Unit::Percentage);
+    }
+    if is_cap {
+        (r.mq, r.unit) = (Mq::Capacitance, Unit::Farad);
+    }
+    if is_temp_f {
+        (r.mq, r.unit) = (Mq::Temperature, Unit::Fahrenheit);
+    }
+    if is_temp_c {
+        (r.mq, r.unit) = (Mq::Temperature, Unit::Celsius);
+    }
+    if is_dbm && !is_ohm {
+        // dBm readings come scaled by a thousand.
+        (r.mq, r.unit) = (Mq::Power, Unit::DecibelMw);
+        value *= 1000.0;
+        digits -= 3;
+    }
+    if is_diode {
+        (r.mq, r.unit) = (Mq::Voltage, Unit::Volt);
+        r.flags |= MqFlags::DIODE | MqFlags::DC;
+    }
+    if r.mq == Mq::Gain {
+        return None;
+    }
+    if is_ac {
+        r.flags |= MqFlags::AC;
+    }
+    if is_dc {
+        r.flags |= MqFlags::DC;
+    }
+    r.value = value as f32;
+    r.digits = digits;
+    Some(r)
+}
+
+#[cfg(test)]
+mod bm85x_tests {
+    use super::*;
+    use crate::Validity;
+
+    fn packet(bfunc: [u8; 4], text: &str) -> Vec<u8> {
+        let mut payload = bfunc.to_vec();
+        payload.extend_from_slice(text.as_bytes());
+        let crc = payload.iter().fold(0u8, |a, b| a ^ b);
+        let mut p = vec![0x10, 0x02, 0x00, payload.len() as u8];
+        p.extend(&payload);
+        p.extend([crc, 0x10, 0x03]);
+        p
+    }
+
+    #[test]
+    fn bm85x_frames_and_parses() {
+        let p = packet([0x06, 0, 0, 0], " 12.345 ");
+        assert_eq!(bm85x_frame(&p), Validity::Valid(p.len()));
+        assert_eq!(bm85x_frame(&p[..3]), Validity::Need);
+        assert_eq!(bm85x_frame(&p[..p.len() - 1]), Validity::Need);
+        assert_eq!(bm85x_frame(&p[1..]), Validity::Invalid);
+        let mut bad = p.clone();
+        bad[6] ^= 1;
+        assert_eq!(bm85x_frame(&bad), Validity::Invalid);
+        let r = bm85x_parse(&p).unwrap();
+        assert_eq!((r.mq, r.unit, r.digits), (Mq::Voltage, Unit::Volt, 3));
+        assert!((r.value - 12.345).abs() < 1e-4);
+        assert!(r.flags.contains(MqFlags::DC));
+        // Temperature with the unit letter in the text, and a dBm value.
+        let p = packet([0x20, 0, 0, 0], " 23.5C");
+        let r = bm85x_parse(&p).unwrap();
+        assert_eq!((r.mq, r.unit), (Mq::Temperature, Unit::Celsius));
+        assert!((r.value - 23.5).abs() < 1e-4);
+        let p = packet([0x00, 0x20, 0, 0], " 0.0123");
+        let r = bm85x_parse(&p).unwrap();
+        assert_eq!((r.mq, r.unit, r.digits), (Mq::Power, Unit::DecibelMw, 1));
+        assert!((r.value - 12.3).abs() < 1e-3);
+        // Overload, negative.
+        let p = packet([0x82, 0, 0, 0], "  -OL  ");
+        let r = bm85x_parse(&p).unwrap();
+        assert!(r.value.is_infinite() && r.value < 0.0);
+        // A reserved bit set: nothing.
+        assert!(bm85x_parse(&packet([0x06, 0x10, 0, 0], " 1.000 ")).is_none());
+        assert_eq!(BM85X_REQUEST.len(), 8);
+    }
+}

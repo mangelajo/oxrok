@@ -141,3 +141,31 @@ fn bm86x_requests_and_two_displays() {
     assert_eq!((out[1].0, out[1].2), (1, Mq::Frequency));
     assert!((out[1].1 - 50.0).abs() < 1e-4);
 }
+
+#[test]
+fn bm85x_variable_length_packets() {
+    // Two BM85x answers of different lengths, the second with junk in
+    // front of it, both after the eight byte request.
+    fn packet(text: &str) -> Vec<u8> {
+        let mut payload = vec![0x06u8, 0, 0, 0];
+        payload.extend_from_slice(text.as_bytes());
+        let crc = payload.iter().fold(0u8, |a, b| a ^ b);
+        let mut p = vec![0x10, 0x02, 0x00, payload.len() as u8];
+        p.extend(&payload);
+        p.extend([crc, 0x10, 0x03]);
+        p
+    }
+    let a = packet(" 12.345 ");
+    let b = packet(" -0.10 ");
+    let fixture = format!(
+        "# oxrok serial fixture 1\nport p 9600/8n1/dtr=1/rts=1\nwrite 1002000000001003\nread 128 -> {}\nwrite 1002000000001003\nread 128 -> 00ff{}\nwrite 1002000000001003\nread 128 -> -\n",
+        hex(&a),
+        hex(&b)
+    );
+    let out = run("brymen-bm85x", &fixture, 2);
+    assert_eq!(out.len(), 2);
+    assert_eq!((out[0].2, out[0].3, out[0].5), (Mq::Voltage, Unit::Volt, 3));
+    assert!((out[0].1 - 12.345).abs() < 1e-4);
+    assert!((out[1].1 + 0.1).abs() < 1e-5);
+    assert_eq!(out[1].5, 2);
+}

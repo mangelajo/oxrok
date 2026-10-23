@@ -82,10 +82,16 @@ runs until stopped.
 Chipsets ported: FS9721, FS9922, DTM0660, Metex 14 byte (single and
 four display), VC-96, ASYC-II, M2110, UT71x, ES519xx (11 and 14 byte,
 2400 and 19200 baud variants), VC-870, RadioShack 22-812, Brymen BM25x,
-BM52x, BM82x, BM86x, Digitech QM1578: 64 meters. Not yet: the Brymen
-BM85x (variable length packets), the EEVblog 121GW, the Mastech MS2115B
-and MS8250D and the Meterman 38XR, and the recordings a BM52x stores in
-memory.
+BM52x, BM82x, BM85x, BM86x, Digitech QM1578, EEVblog 121GW, Mastech
+MS2115B and MS8250D, Meterman 38XR: all 69 meters of libsigrok's
+serial-dmm driver. Multi display meters put each display on its own
+channel (`P1`/`P2`, or `main`/`sub`/`bar` where sigrok names them so).
+Not ported: the recordings a BM52x stores in memory.
+
+The BM85x is the one meter with variable length packets: its protocol
+frames the stream itself (`Protocol::frame`), and the driver pulses RTS
+after opening the port as the meter requires. Nothing on this list past
+the FS9721 and ES519xx families has met a real meter; see below.
 
 ### HID cables
 

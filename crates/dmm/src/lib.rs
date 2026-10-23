@@ -28,7 +28,10 @@
 
 pub mod ascii;
 pub mod brymen;
+pub mod eev121gw;
 pub mod lcd;
+pub mod mastech;
+pub mod meterman;
 pub mod ranged;
 pub mod segments;
 
@@ -59,11 +62,25 @@ impl Reading {
     }
 }
 
+/// What a framing function says about the bytes at hand.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Validity {
+    /// Not enough bytes yet to decide.
+    Need,
+    /// No packet starts here.
+    Invalid,
+    /// A packet of this many bytes starts here.
+    Valid(usize),
+}
+
 /// A chipset protocol: how to recognise and parse its packets.
 #[derive(Clone, Copy)]
 pub struct Protocol {
-    /// Bytes per packet.
+    /// Bytes per packet, or the shortest packet when `frame` is set.
     pub packet_size: usize,
+    /// Frames a variable length packet at the start of a buffer; when
+    /// unset, packets are `packet_size` bytes and `valid` decides.
+    pub frame: Option<fn(&[u8]) -> Validity>,
     /// Displays per packet, each a channel.
     pub channels: usize,
     /// Channel names, or empty for `P1`, `P2`, ...
@@ -74,6 +91,38 @@ pub struct Protocol {
     pub parse: fn(&[u8]) -> Vec<Reading>,
     /// Bytes to send to ask the meter for a packet, if it needs that.
     pub request: Option<&'static [u8]>,
+}
+
+impl Protocol {
+    /// Frames the packet at the start of `buf`: fixed size with the
+    /// validity check, or the protocol's own framing.
+    pub fn frame_at(&self, buf: &[u8]) -> Validity {
+        if let Some(f) = self.frame {
+            return f(buf);
+        }
+        if buf.len() < self.packet_size {
+            Validity::Need
+        } else if (self.valid)(&buf[..self.packet_size]) {
+            Validity::Valid(self.packet_size)
+        } else {
+            Validity::Invalid
+        }
+    }
+
+    /// Finds the first packet in `buf`: its start and length, or `None`
+    /// when more bytes are needed. Leading bytes that start no packet
+    /// are skipped.
+    pub fn find_packet(&self, buf: &[u8]) -> Option<(usize, usize)> {
+        let mut pos = 0;
+        while pos < buf.len() {
+            match self.frame_at(&buf[pos..]) {
+                Validity::Need => return None,
+                Validity::Invalid => pos += 1,
+                Validity::Valid(n) => return Some((pos, n)),
+            }
+        }
+        None
+    }
 }
 
 /// Scales `value` by `10^exponent` and returns the digits that go with

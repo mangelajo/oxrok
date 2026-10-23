@@ -15,7 +15,10 @@
 
 use oxrok_dmm::lcd::Fs9721Symbols;
 use oxrok_dmm::ranged::Es519xx;
-use oxrok_dmm::{Protocol, Reading, ascii, brymen, lcd, ranged, segments};
+use oxrok_dmm::{
+    Protocol, Reading, ascii, brymen, eev121gw, lcd, mastech, meterman, ranged, segments,
+};
+use oxrok_serial::Port;
 
 /// One supported meter.
 pub struct Model {
@@ -39,6 +42,8 @@ pub struct Model {
     /// For meters that must be asked: how long to wait after a packet
     /// before asking for the next.
     pub request_delay_ms: u64,
+    /// Line handling the meter needs right after the port is opened.
+    pub after_open: Option<fn(&mut dyn Port) -> oxrok_core::Result<()>>,
 }
 
 macro_rules! single {
@@ -52,7 +57,15 @@ const fn protocol(
     valid: fn(&[u8]) -> bool,
     parse: fn(&[u8]) -> Vec<Reading>,
 ) -> Protocol {
-    Protocol { packet_size, channels: 1, channel_names: &[], valid, parse, request: None }
+    Protocol {
+        packet_size,
+        frame: None,
+        channels: 1,
+        channel_names: &[],
+        valid,
+        parse,
+        request: None,
+    }
 }
 
 const fn requested(p: Protocol, request: &'static [u8]) -> Protocol {
@@ -112,6 +125,7 @@ const METEX14: Protocol = requested(
 );
 const METEX14_X4: Protocol = Protocol {
     packet_size: 4 * ascii::METEX14_SIZE,
+    frame: None,
     channels: 4,
     channel_names: &[],
     valid: ascii::metex14_x4_valid,
@@ -141,6 +155,7 @@ const QM1578: Protocol =
     protocol(segments::QM1578_SIZE, segments::qm1578_valid, single!(segments::qm1578_parse));
 const BM52X: Protocol = Protocol {
     packet_size: brymen::BRYMEN_SIZE,
+    frame: None,
     channels: brymen::BRYMEN_DISPLAYS,
     channel_names: &[],
     valid: brymen::bm52x_valid,
@@ -149,6 +164,40 @@ const BM52X: Protocol = Protocol {
 };
 const BM82X: Protocol =
     Protocol { valid: brymen::bm82x_valid, request: Some(brymen::BM82X_REQUEST), ..BM52X };
+fn bm85x_never(_: &[u8]) -> bool {
+    false
+}
+const BM85X: Protocol = Protocol {
+    packet_size: brymen::BM85X_MIN_SIZE,
+    frame: Some(brymen::bm85x_frame),
+    channels: 1,
+    channel_names: &[],
+    valid: bm85x_never,
+    parse: single!(brymen::bm85x_parse),
+    request: Some(brymen::BM85X_REQUEST),
+};
+const EEV121GW: Protocol = Protocol {
+    packet_size: eev121gw::EEV121GW_SIZE,
+    frame: None,
+    channels: eev121gw::EEV121GW_DISPLAYS,
+    channel_names: &eev121gw::EEV121GW_CHANNELS,
+    valid: eev121gw::eev121gw_valid,
+    parse: eev121gw::eev121gw_parse,
+    request: None,
+};
+const MS2115B: Protocol = Protocol {
+    packet_size: mastech::MS2115B_SIZE,
+    frame: None,
+    channels: mastech::MS2115B_DISPLAYS,
+    channel_names: &mastech::MS2115B_CHANNELS,
+    valid: mastech::ms2115b_valid,
+    parse: mastech::ms2115b_parse,
+    request: None,
+};
+const MS8250D: Protocol =
+    protocol(mastech::MS8250D_SIZE, mastech::ms8250d_valid, single!(mastech::ms8250d_parse));
+const MM38XR: Protocol =
+    protocol(meterman::MM38XR_SIZE, meterman::mm38xr_valid, single!(meterman::mm38xr_parse));
 const BM86X: Protocol = Protocol {
     valid: brymen::bm86x_valid,
     parse: brymen::bm86x_parse,
@@ -172,7 +221,31 @@ const fn m(
         protocol,
         request_timeout_ms: 0,
         request_delay_ms: 0,
+        after_open: None,
     }
+}
+
+/// The BM85x wants an RTS pulse before it talks: wait, RTS high, wait,
+/// RTS low, wait, RTS high, wait, 100 ms each.
+#[allow(clippy::doc_markdown)]
+fn bm85x_after_open(port: &mut dyn Port) -> oxrok_core::Result<()> {
+    let pause = || std::thread::sleep(std::time::Duration::from_millis(100));
+    pause();
+    port.set_handshake(Some(true), None)?;
+    pause();
+    port.set_handshake(Some(false), None)?;
+    pause();
+    port.set_handshake(Some(true), None)?;
+    pause();
+    Ok(())
+}
+
+const fn with_after_open(
+    mut model: Model,
+    f: fn(&mut dyn Port) -> oxrok_core::Result<()>,
+) -> Model {
+    model.after_open = Some(f);
+    model
 }
 
 const fn timed(mut model: Model, timeout_ms: u64, delay_ms: u64) -> Model {
@@ -195,13 +268,21 @@ const fn with_parse(mut p: Protocol, parse: fn(&[u8]) -> Vec<Reading>) -> Protoc
 /// lists them.
 pub static MODELS: &[Model] = &[
     m("digitech-qm1578", "Digitech", "QM1578", "115200/8n1", QM1578),
+    m("mastech-ms2115b", "MASTECH", "MS2115B", "1200/8n1", MS2115B),
+    m("mastech-ms8250d", "MASTECH", "MS8250D", "2400/8n1/rts=0/dtr=1", MS8250D),
+    m("meterman-38xr", "Meterman", "38XR", "9600/8n1/rts=0/dtr=1", MM38XR),
     m("metrix-mx56c", "Metrix", "MX56C", "2400/8n1", ASYCII),
     m("brymen-bm25x", "Brymen", "BM25x", "9600/8n1/rts=1/dtr=1", BM25X),
     on_hid(timed(m("brymen-bm52x", "Brymen", "BM52x", "9600/8n1", BM52X), 4000, 500), "hid/bu86x"),
     on_hid(timed(m("brymen-bm82x", "Brymen", "BM82x", "9600/8n1", BM82X), 4000, 500), "hid/bu86x"),
+    with_after_open(
+        timed(m("brymen-bm85x", "Brymen", "BM85x", "9600/8n1/dtr=1/rts=1", BM85X), 2000, 400),
+        bm85x_after_open,
+    ),
     on_hid(timed(m("brymen-bm86x", "Brymen", "BM86x", "9600/8n1", BM86X), 500, 100), "hid/bu86x"),
     m("peaktech-3415", "PeakTech", "3415", "2400/8n1/rts=0/dtr=1", DTM0660),
     m("velleman-dvm4100", "Velleman", "DVM4100", "2400/8n1/rts=0/dtr=1", DTM0660),
+    m("eevblog-121gw", "EEVblog", "121GW", "115200/8n1", EEV121GW),
     m("iso-tech-idm103n", "ISO-TECH", "IDM103N", "2400/7o1/rts=0/dtr=1", ES519XX_2400_11B),
     m(
         "tenma-72-7750-ser",
@@ -341,6 +422,7 @@ mod tests {
         assert_eq!(find("metex-m3860m").unwrap().protocol.channels, 4);
         assert_eq!(find("brymen-bm86x").unwrap().conn, "hid/bu86x");
         assert_eq!(find("victor-dmm").unwrap().protocol.packet_size, 14);
-        assert_eq!(MODELS.len(), 64);
+        assert_eq!(MODELS.len(), 69);
+        assert!(find("brymen-bm85x").unwrap().protocol.frame.is_some());
     }
 }
