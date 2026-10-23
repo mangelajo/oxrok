@@ -101,6 +101,10 @@ fn find_port() -> Option<String> {
                 || n.starts_with("ttyACM")
         })
         .collect();
-    names.sort();
+    // USB to UART bridges first: a CDC port (usbmodem, ttyACM) is more
+    // likely another board, such as the HID cable emulator.
+    let rank = |n: &str| usize::from(n.contains("usbmodem") || n.starts_with("ttyACM"));
+    names.retain(|n| !n.contains("HIDCABLE"));
+    names.sort_by(|a, b| rank(a).cmp(&rank(b)).then_with(|| a.cmp(b)));
     names.first().map(|n| format!("{dir}/{n}"))
 }
