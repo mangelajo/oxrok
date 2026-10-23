@@ -23,7 +23,7 @@ pub fn registry() -> Registry {
     r.register(&oxrok::decoders::ALL);
     // Python decoders come after the native ones, which win on an id
     // both have.
-    #[cfg(feature = "python")]
+    #[cfg(any(feature = "python", feature = "rustpython"))]
     r.register(&oxrok::pydecode::defs());
     r
 }

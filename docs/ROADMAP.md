@@ -16,6 +16,7 @@
 | 6f | HID devices: `uni-t-dmm` twins, `uni-t-ut32x`, `dcttech-usbrelay`, `microchip-pickit2` | done 2026-10-23 against the Pico emulator; a real PICkit2 is the open check |
 | 6d | the remaining USB logic analyzers, one per recording | each ships a replay fixture; bench runs where the device is at hand |
 | 7 | packaging: static binaries, Homebrew, AUR, udev rules | a clean machine installs and captures without any sigrok package |
+| 7b | release binaries with the Python decoders | done 2026-10-23: the `rustpython` feature and `make dist`; the `Release binaries` workflow builds static Linux (musl), macOS and Windows archives with the 0.5.3 decoders, by hand and on each release |
 | 7a | one crate, GitHub repository, CI on three platforms | done 2026-10-23: the workspace folded into the `oxrok` package, pushed to github.com/mangelajo/oxrok, CI green on Linux, macOS and Windows |
 | 8 | release 0.1 | tags, changelog, guides, `cargo publish` |
 

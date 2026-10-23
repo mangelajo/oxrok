@@ -13,7 +13,13 @@ Not legal advice. The policy oxrok follows:
   the user installs it from the vendor. The bench firmware under `hil/`
   is part of this repository and GPL-3.0-or-later too.
 - Python decoders from the sigrok distribution are loaded at run time
-  from the user's install or a decoders directory.
+  from the user's install or a decoders directory. The release archives
+  ship libsigrokdecode 0.5.3's `decoders` directory unchanged next to
+  the binary, with libsigrokdecode's `COPYING` (GPL-3.0); like the
+  binary they are GPL, and the archive is an aggregate of the two.
+- The `rustpython` feature builds RustPython (MIT) and its standard
+  library, which is CPython's (PSF License), into the binary; both are
+  compatible with the GPL.
 - "sigrok" is the name of another project. oxrok describes itself as
   sigrok compatible and never uses the name as its own.
 

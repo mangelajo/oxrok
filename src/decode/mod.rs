@@ -487,6 +487,9 @@ impl Stack {
         let name = instance.clone();
         let handle = std::thread::Builder::new()
             .name(format!("decoder {instance}"))
+            // Python decoders run on this thread, and an interpreter
+            // needs more than the default 2 MiB in a debug build.
+            .stack_size(8 << 20)
             .spawn(move || {
                 // Sends End for the chain when the thread ends, also by
                 // a panic.

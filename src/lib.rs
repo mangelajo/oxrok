@@ -12,22 +12,33 @@
 //!   sigrok-cli;
 //! - [`decode`] and [`decoders`]: the protocol decoder runtime and the
 //!   native decoders; [`pydecode`] hosts libsigrokdecode's Python
-//!   decoders when built with the `python` feature.
+//!   decoders when built with the `rustpython` or `python` feature.
 //!
 //! # Features
 //!
 //! - `cli` (default): the `oxrok` command line tool.
 //! - `nusb` (default) and `libusb`: the USB backends; with both,
 //!   `OXROK_USB_BACKEND` picks one at run time.
-//! - `python`: [`pydecode`], which runs libsigrokdecode's Python
-//!   decoders unchanged.
+//! - `rustpython`: [`pydecode`], which runs libsigrokdecode's Python
+//!   decoders unchanged, on a RustPython interpreter built into the
+//!   binary. Needs Rust 1.96.
+//! - `python`: the same on the system's CPython, through pyo3. With
+//!   both, CPython is used unless `OXROK_PYTHON=rustpython`.
 //!
 //! # Installing
 //!
 //! ```text
 //! cargo install oxrok --version 0.1.0-alpha.1 --locked
+//! cargo install oxrok --version 0.1.0-alpha.1 --locked --features rustpython
 //! cargo install oxrok --version 0.1.0-alpha.1 --locked --features python
 //! ```
+//!
+//! The release archives on GitHub hold a `rustpython` build with the
+//! libsigrokdecode 0.5.3 decoders next to it, and need nothing else.
+//!
+//! The `rustpython` feature relies on a pin in `Cargo.lock`, so install
+//! with `--locked`. As a dependency, pin it in your own lockfile:
+//! `cargo update -p malachite-bigint@0.14.0 --precise 0.12.0`.
 //!
 //! The `python` feature needs Python 3.9 or newer with its shared
 //! library at build and at run time (Homebrew or python.org Pythons,
@@ -35,10 +46,10 @@
 //! the decoders of a libsigrokdecode installation (`brew install
 //! libsigrokdecode`, the distribution package, or a checkout). The build
 //! takes the interpreter from `PYO3_PYTHON`, the active virtualenv, or
-//! `python` and `python3` on `PATH`. Decoders are found in
-//! `OXROK_DECODERS_DIR`, `SIGROKDECODE_DIR`,
-//! `~/.local/share/libsigrokdecode/decoders` and the usual system
-//! directories.
+//! `python` and `python3` on `PATH`. With either feature, decoders are
+//! found in `OXROK_DECODERS_DIR`, `SIGROKDECODE_DIR`, `decoders` next to
+//! the executable, `~/.local/share/libsigrokdecode/decoders` and the
+//! usual system directories.
 //!
 //! As a library dependency:
 //!
@@ -58,7 +69,7 @@ pub mod ezusb;
 pub mod formats;
 pub mod ftdi;
 pub mod hid;
-#[cfg(feature = "python")]
+#[cfg(any(feature = "python", feature = "rustpython"))]
 pub mod pydecode;
 pub mod scpi;
 pub mod serial;

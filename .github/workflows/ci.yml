@@ -46,7 +46,8 @@ jobs:
         with:
           toolchain: "1.95"
       - uses: Swatinem/rust-cache@v2
-      - run: cargo check --workspace --all-features
+      # rustpython needs 1.96, for its parser.
+      - run: cargo check --workspace --features python,libusb
 
   python-decoders:
     name: python decoders
@@ -59,3 +60,5 @@ jobs:
       - run: sudo apt-get update && sudo apt-get install -y python3-dev libsigrokdecode4
       - run: cargo nextest run -p oxrok --features python --no-fail-fast
       - run: cargo clippy -p oxrok --features python --all-targets
+      - run: cargo nextest run -p oxrok --features rustpython --no-fail-fast
+      - run: cargo clippy -p oxrok --features rustpython --all-targets

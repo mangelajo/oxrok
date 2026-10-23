@@ -186,7 +186,7 @@ fn real_captures_match_libsigrokdecode() {
 /// The Python host, with the python feature and a libsigrokdecode
 /// installation. Without the decoders the tests pass vacuously and say
 /// so.
-#[cfg(feature = "python")]
+#[cfg(any(feature = "python", feature = "rustpython"))]
 mod python {
     use super::*;
 

@@ -31,6 +31,19 @@ nusb = ["dep:nusb"]
 libusb = ["dep:rusb"]
 # Run libsigrokdecode's Python decoders through the system Python.
 python = ["dep:pyo3"]
+# Run them through RustPython instead: no Python installation needed,
+# about three times slower. Used for the release binaries.
+rustpython = [
+    "dep:rustpython-vm",
+    "dep:rustpython-stdlib",
+    "dep:rustpython-pylib",
+    "dep:rustpython-ruff_python_ast",
+    "dep:rustpython-ruff_python_parser",
+    "dep:rustpython-ruff_python_trivia",
+    "dep:rustpython-ruff_source_file",
+    "dep:rustpython-ruff_text_size",
+    "dep:malachite-bigint",
+]
 
 [dependencies]
 log.workspace = true
@@ -48,6 +61,18 @@ async-hid = { version = "0.5", default-features = false, features = ["async-io",
 async-io = "2"
 futures-lite = "2"
 pyo3 = { version = "0.30", features = ["auto-initialize"], optional = true }
+rustpython-vm = { version = "=0.6.0", default-features = false, features = ["threading", "host_env", "stdio", "importlib", "encodings", "freeze-stdlib", "compiler", "gc"], optional = true }
+rustpython-stdlib = { version = "=0.6.0", default-features = false, features = ["threading", "host_env", "compiler"], optional = true }
+rustpython-pylib = { version = "=0.6.0", features = ["freeze-stdlib"], optional = true }
+# Pins for RustPython 0.6.0: its ruff parser fork broke its API inside
+# 0.16.x, and pymath accepts any malachite-bigint 0.x while RustPython
+# 0.6.0 needs 0.12.
+rustpython-ruff_python_ast = { version = "=0.16.5", optional = true }
+rustpython-ruff_python_parser = { version = "=0.16.5", optional = true }
+rustpython-ruff_python_trivia = { version = "=0.16.5", optional = true }
+rustpython-ruff_source_file = { version = "=0.16.5", optional = true }
+rustpython-ruff_text_size = { version = "=0.16.5", optional = true }
+malachite-bigint = { version = "=0.12.0", optional = true }
 
 [lints]
 workspace = true

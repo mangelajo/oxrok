@@ -55,23 +55,24 @@ and is written from the protocol and the decoder's documented output.
 
 ## Python decoders
 
-With the `python` cargo feature (installation in the README) oxrok
-runs the unchanged `pd.py` files of a
+With the `rustpython` or the `python` cargo feature (installation in
+the README) oxrok runs the unchanged `pd.py` files of a
 libsigrokdecode installation. The decoders are looked for in
-`OXROK_DECODERS_DIR`, `SIGROKDECODE_DIR`, `~/.local/share/libsigrokdecode/decoders`
-and the system directories. Native decoders take precedence over a
-Python decoder of the same id.
+`OXROK_DECODERS_DIR`, `SIGROKDECODE_DIR`, `decoders` next to the
+executable, `~/.local/share/libsigrokdecode/decoders` and the system
+directories. Native decoders take precedence over a Python decoder of
+the same id.
 
-`oxrok::pydecode` provides the `sigrokdecode` module the decoders
-import: the `Decoder` base class with `wait`, `put`, `register` and
-`has_channel`, the output constants and `SRD_CONF_SAMPLERATE`. Each
-Python decoder is a runtime `Decoder`; its `decode` runs on the
-instance's thread with the interpreter attached, `wait` releases the
-interpreter while it blocks for samples, and `options`, `samplenum`
-and `matched` are set on the instance as libsigrokdecode does. All 112
-decoders of libsigrokdecode 0.5.3 load; `timing`, chains such as
-`uart,midi`, `i2c,eeprom24xx`, `i2c,rtc8564`, `spi,sdcard_spi` and
-`parallel` print what sigrok-cli prints.
+Each Python decoder is a runtime `Decoder` whose `decode` runs on the
+instance's thread. Both hosts provide the `sigrokdecode` module the
+decoders import: the `Decoder` base class with `wait`, `put`,
+`register` and `has_channel`, the output constants and
+`SRD_CONF_SAMPLERATE`; `options`, `samplenum` and `matched` are set on
+the instance as libsigrokdecode does. `wait` lets other threads run
+while it blocks for samples. All 111 decoders of libsigrokdecode 0.5.3
+load on both hosts; `timing`, chains such as `uart,midi`,
+`i2c,eeprom24xx`, `i2c,rtc8564`, `spi,sdcard_spi` and `parallel` print
+what sigrok-cli prints.
 
 Stacking is synchronous: a decoder's Python output is handed to the
 decoder above before the lower one continues, so annotations of a chain
@@ -81,17 +82,41 @@ also libsigrokdecode's behaviour. Items pass between two Python
 decoders as the original objects; between a native and a Python decoder
 they are converted (lists, numbers, strings, bytes, None).
 
-The interpreter choice came from the spike on 2026-10-22:
+### The two hosts
 
-- PyO3 0.30 with the system Python 3.14 ran the unmodified `uart`
-  decoder with a Rust `wait` behind it at 3 million samples per second
-  (5.5 million samples, 850 thousand annotations, 1.8 s). Loading took
-  2 ms. Everything the decoders import (`re`, `collections`, `math`,
-  `struct`, `functools`, the `common` package) is there.
-- RustPython 0.6.0 from crates.io does not build: its own sub-crates
-  resolve to incompatible versions and pinning them hits a second
-  conflict. It stays an option for a static binary later, behind the
-  same host interface, when a consistent release exists.
+- `python` (`src/pydecode/cpython.rs`): the system's CPython through
+  PyO3 0.30. `sigrokdecode` is a module written in Rust; `wait`
+  detaches from the interpreter while it blocks.
+- `rustpython` (`src/pydecode/rustpython.rs`): RustPython 0.6.0 with
+  its standard library frozen into the binary, so nothing but the
+  decoders is needed at run time. `sigrokdecode` is
+  `src/pydecode/sigrokdecode.py`, over a native `_oxrok` module that
+  reaches the running decoder's context. RustPython has no global lock;
+  each thread gets its own virtual machine on the shared interpreter.
+
+With both features CPython is used unless `OXROK_PYTHON=rustpython`.
+
+What it takes to run the decoders on RustPython the way CPython does:
+
+- `sum()` of floats is CPython's since 3.12, with Neumaier's
+  compensation. RustPython adds plainly, which changed the last digit
+  of `timing` averages and `graycode` periods, so the shim installs a
+  copy of CPython's algorithm as `builtins.sum`.
+- Compiler warnings about the invalid escapes in older decoders are
+  silenced, and no bytecode is written next to the decoders.
+- RustPython 0.6.0 builds only with pins: its ruff parser fork changed
+  its API within 0.16.x, so the five `rustpython-ruff_*` crates are
+  pinned to 0.16.5, and pymath accepts any `malachite-bigint` 0.x while
+  RustPython needs 0.12 (the lockfile pins it; install with
+  `--locked`). The parser needs Rust 1.96.
+- Interpreter start and deep decoders need more than the default 2 MiB
+  thread stack in a debug build; decoder threads get 8 MiB.
+
+Over 271 sigrok-test runs of the Python decoders (two captures per
+decoder, chains included, annotations and binary outputs) both hosts
+print the same bytes; the whole set took 1.2 times as long on
+RustPython. Long decodes in one process take up to about three times
+as long.
 
 The default build has no Python dependency.
 

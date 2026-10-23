@@ -1,9 +1,10 @@
 # oxrok
 
 An experimental sigrok compatible logic analyzer stack in Rust: a
-library, drivers and a command line tool. No C libraries, no Python
-runtime unless the optional `python` feature is enabled for
-libsigrokdecode's decoders, one `cargo build`.
+library, drivers and a command line tool. No C libraries and no Python
+installation needed, one `cargo build`: libsigrokdecode's Python
+decoders run on a built-in RustPython interpreter (feature
+`rustpython`) or on the system's CPython (feature `python`).
 
 oxrok is not part of the sigrok project. It keeps sigrok's file formats,
 command line flags and decoder ids so existing tools, scripts and habits
@@ -29,8 +30,8 @@ style command line, the `bits`, `hex`, `ascii`, `analog`, `csv`, `vcd`,
 `binary` and `srzip` outputs, `.sr`, VCD and binary inputs, USB, serial,
 HID and SCPI transports with record and replay, eight driver families
 and native `uart`, `i2c` and `spi` decoders that print what
-libsigrokdecode prints. With the `python` feature the unchanged
-libsigrokdecode decoders run too. See `docs/ROADMAP.md`.
+libsigrokdecode prints. With the `rustpython` or `python` feature the
+unchanged libsigrokdecode decoders run too. See `docs/ROADMAP.md`.
 
 ### Hardware validated so far
 
@@ -64,6 +65,21 @@ for the same command, which is how the test suite checks it.
 
 ## Installing
 
+### Release binaries
+
+Each GitHub release has an archive per platform: Linux x86_64 and
+aarch64 (static, musl), macOS x86_64 and arm64, Windows x86_64. Each
+holds one `oxrok` binary built with the `rustpython` feature and, in
+`decoders/`, the decoders of libsigrokdecode 0.5.3, so nothing else
+needs installing. Unpack it anywhere and run `oxrok` from there; keep
+`decoders/` next to the binary.
+
+The archives are built by `make dist` (see the `Makefile`) in the
+`Release binaries` workflow, which also runs by hand from the Actions
+tab.
+
+### With cargo
+
 The current release is a pre-release, so name its version:
 
 ```sh
@@ -76,8 +92,25 @@ with.
 
 ### With the Python decoders
 
-The `python` feature runs libsigrokdecode's Python decoders unchanged,
-next to the native `uart`, `i2c` and `spi`. It needs two things:
+Two features run libsigrokdecode's Python decoders unchanged, next to
+the native `uart`, `i2c` and `spi`:
+
+- `rustpython` builds the RustPython interpreter and its standard
+  library into the binary. Nothing is needed at run time but the
+  decoders. It needs Rust 1.96 or newer and `--locked`, which keeps a
+  dependency pin RustPython 0.6.0 relies on. The output is the same
+  as on CPython: 271 sigrok-test runs of the Python decoders compare
+  equal. Those runs took 1.2 times as long as on CPython; long decodes
+  take up to about three times as long.
+- `python` uses the system's CPython through pyo3.
+
+```sh
+cargo install oxrok --version 0.1.0-alpha.1 --locked --features rustpython
+```
+
+With both features, CPython is used unless `OXROK_PYTHON=rustpython`.
+
+The `python` feature needs two things:
 
 - Python 3.9 or newer with its shared library, at build time and at
   run time, since the binary links against the interpreter found when
@@ -99,6 +132,7 @@ The build uses `PYO3_PYTHON` when set, else the active virtualenv, else
 upgrading that Python.
 
 Decoders are looked up in `OXROK_DECODERS_DIR`, `SIGROKDECODE_DIR`,
+`decoders` next to the executable,
 `~/.local/share/libsigrokdecode/decoders`, then
 `/opt/homebrew/share`, `/usr/local/share` and `/usr/share` (each
 followed by `libsigrokdecode/decoders`). To check the setup:
@@ -125,10 +159,10 @@ One crate, `oxrok`, with the library and the binary. Modules:
 | `dmm` | multimeter packet parsers |
 | `drivers::*` | demo, logicport, fx2lafw, serial_dmm, rigol_ds, raspberrypi_pico, dcttech_usbrelay, microchip_pickit2 |
 | `decode`, `decoders` | the decoder API and the native `uart`, `i2c`, `spi` decoders |
-| `pydecode` | runs libsigrokdecode's Python decoders (feature `python`) |
+| `pydecode` | runs libsigrokdecode's Python decoders (features `rustpython`, `python`) |
 
 Cargo features: `cli` (the binary, default), `nusb` (default) and
-`libusb` USB backends, `python`. `hil/oxrok-hil` is the bench tool, not
+`libusb` USB backends, `rustpython`, `python`. `hil/oxrok-hil` is the bench tool, not
 published.
 
 ## Beyond sigrok: triggers

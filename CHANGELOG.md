@@ -8,12 +8,31 @@ release may change the library API.
 
 ### Added
 
+- The `rustpython` feature: libsigrokdecode's Python decoders on a
+  RustPython 0.6.0 interpreter built into the binary, with its
+  standard library frozen in, so no Python installation is needed.
+  Same output as the CPython host over 271 sigrok-test runs. With both
+  features `OXROK_PYTHON=rustpython` selects it.
+- `make dist` and the `Release binaries` workflow (run by hand, and on
+  each published release, which gets the archives attached): static
+  Linux binaries (musl, x86_64 and aarch64), macOS (x86_64, arm64) and
+  Windows (x86_64), built with `rustpython`, with the libsigrokdecode
+  0.5.3 decoders in `decoders/` next to the binary.
+- Python decoders are also looked for in `decoders` next to the
+  executable.
 - Installation notes for the `python` feature in the README and the
   crate documentation.
 - `tests/libsigrok_parity.rs`: the value tables of libsigrok's own unit
   tests (sample rate, period and voltage strings, SI prefixes, unit
   strings, the binary input, module listings, the demo sample rate,
   triggers, version) run against oxrok.
+
+### Changed
+
+- `oxrok::pydecode` has a module per host, `cpython` and `rustpython`;
+  `PyItem` stays the opaque item type of the CPython host, `RpItem` is
+  the RustPython one.
+- Decoder threads have an 8 MiB stack.
 
 ### Fixed
 

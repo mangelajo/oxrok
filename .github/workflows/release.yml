@@ -1,0 +1,71 @@
+name: Release binaries
+
+# Run by hand from the Actions tab for test builds, and on every
+# published release, where the archives are attached to the release.
+on:
+  workflow_dispatch:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: ${{ matrix.target }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { target: x86_64-unknown-linux-musl, os: ubuntu-latest }
+          - { target: aarch64-unknown-linux-musl, os: ubuntu-24.04-arm }
+          - { target: x86_64-apple-darwin, os: macos-15-intel }
+          - { target: aarch64-apple-darwin, os: macos-latest }
+          - { target: x86_64-pc-windows-msvc, os: windows-latest }
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+      - name: Install musl-gcc
+        if: contains(matrix.target, 'musl')
+        run: sudo apt-get update && sudo apt-get install -y musl-tools
+      - name: Install make
+        if: runner.os == 'Windows'
+        run: command -v make || choco install make -y
+      - run: make dist TARGET=${{ matrix.target }}
+      - name: Smoke test the archive
+        run: |
+          mkdir smoke && cd smoke
+          case "${{ matrix.target }}" in
+            *windows*) 7z x ../dist/*.zip >/dev/null ;;
+            *) tar -xzf ../dist/*.tar.gz ;;
+          esac
+          cd oxrok-*
+          if [[ "${{ matrix.target }}" == *linux* ]]; then
+            file oxrok
+            file oxrok | grep -q 'statically linked'
+          fi
+          ./oxrok --version
+          ./oxrok -L | grep -q '^  timing '
+          ./oxrok -l 4 -i ../../tests/fixtures/uart-hi.vcd -P timing > timing.ann
+          diff timing.ann ../../tests/fixtures/uart-hi-timing.ann
+      - uses: actions/upload-artifact@v4
+        with:
+          name: oxrok-${{ matrix.target }}
+          path: dist/*
+      - name: Attach to the release
+        if: github.event_name == 'release'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${{ github.event.release.tag_name }}" dist/* --clobber
