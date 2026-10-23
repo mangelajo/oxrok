@@ -134,6 +134,41 @@ UT60A streams give the same readings through oxrok and sigrok-cli
 (`tools/diffcli.sh --hw`, cases `serial dmm`). The ESP32 port runs at
 921600 baud, so those runs pass `serialcomm=921600/8n1`.
 
+## Rigol and Agilent oscilloscopes
+
+The `rigol-ds` driver covers the same 61 models as libsigrok's: Rigol
+VS5000, DS1000 (DS1052E, DS1102E, DS1152E and the D variants with the
+logic pod), DS2000 and DS2000A/MSO2000A, DS1000Z and MSO1000Z, DS4000,
+MSO5000, and the Agilent DSO1000A/B and MSO7034A. It speaks SCPI over
+`oxrok-scpi`, which carries USBTMC (the USB port on the scope), raw TCP,
+Rigol's length prefixed TCP and serial ports:
+
+```
+oxrok -d rigol-ds --show                           # any USBTMC scope
+oxrok -d rigol-ds:conn=usbtmc/1.5 --frames 1 -O analog
+oxrok -d rigol-ds:conn=tcp-rigol/192.168.1.20/5555 -c timebase=1ms -C CH1 --frames 2 -O csv
+```
+
+Options follow sigrok: `timebase`, `triggersource`, `triggerslope`,
+`triggerlevel`, `horiz_triggerpos`, `data_source` (`Live`, `Memory`,
+`Segmented` as the series allows) and `limit_frames`; per analog channel
+group (`-g CH1`) `vdiv`, `coupling` and `probe_factor`. Every setting is
+written to the scope at once and the current values are read back when
+the device opens. A capture downloads each enabled channel once per
+frame, scaled to volts, between `FRAME-BEGIN` and `FRAME-END`; the
+sample rate is the frame length over the screen width for `Live`
+and `:WAV:XINC?` for the memory sources.
+
+One difference from libsigrok on purpose: `horiz_triggerpos` is
+converted to seconds with the number of horizontal divisions, where
+libsigrok multiplies by the number of timebases in its table.
+
+Verification: the DS1000E path (readback, one live frame, key unlock
+on close) runs in a replay test against a hand written SCPI fixture
+with the exact command sequence; the user's DS1102E is the bench device
+for the real run, which has not happened yet. The other series have
+no recordings; `OXROK_SCPI_RECORD=FILE` captures one from any run.
+
 ## fx2lafw devices
 
 Saleae Logic and its clones, the CWAV USBee models, the bare Cypress FX2

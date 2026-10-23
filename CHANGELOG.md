@@ -22,6 +22,14 @@ release may change the library API.
   22-812, BM25x, BM52x, BM82x, BM85x, BM86x, QM1578, EEVblog 121GW,
   MS2115B, MS8250D, Meterman 38XR) and `oxrok-driver-serial-dmm` with
   all 69 meter ids of libsigrok, one driver per meter as in sigrok.
+- `oxrok-scpi`: SCPI over USBTMC (`oxrok-usb`), raw and Rigol TCP and
+  serial ports, with the IEEE 488.2 helpers and a text fixture of
+  commands and responses (`OXROK_SCPI_RECORD`). `oxrok-usb` reports
+  interface classes and endpoints.
+- `oxrok-driver-rigol-ds`: the `rigol-ds` scope driver with all 61
+  Rigol and Agilent models of libsigrok; frames as analog packets
+  between `FrameBegin` and `FrameEnd`, which the analog output prints
+  as `FRAME-BEGIN` and `FRAME-END` like sigrok-cli.
 - `oxrok-hid`: USB HID transport over `async-hid`, and serial over HID
   cables in `oxrok-serial` (Brymen BU-86X, WCH CH9325, SiLabs CP2110,
   Victor), named `hid[/CHIP][/sn=SERIAL]` as in sigrok. Meters that

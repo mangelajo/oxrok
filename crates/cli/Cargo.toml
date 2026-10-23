@@ -31,6 +31,7 @@ oxrok-driver-demo.workspace = true
 oxrok-driver-logicport.workspace = true
 oxrok-driver-fx2lafw.workspace = true
 oxrok-driver-serial-dmm.workspace = true
+oxrok-driver-rigol-ds.workspace = true
 oxrok-decode.workspace = true
 oxrok-decoders.workspace = true
 oxrok-pydecode = { workspace = true, optional = true }

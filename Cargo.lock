@@ -720,6 +720,7 @@ dependencies = [
  "oxrok-driver-demo",
  "oxrok-driver-fx2lafw",
  "oxrok-driver-logicport",
+ "oxrok-driver-rigol-ds",
  "oxrok-driver-serial-dmm",
  "oxrok-formats",
  "oxrok-pydecode",
@@ -785,6 +786,15 @@ dependencies = [
  "oxrok-core",
  "oxrok-ftdi",
  "oxrok-usb",
+]
+
+[[package]]
+name = "oxrok-driver-rigol-ds"
+version = "0.1.0"
+dependencies = [
+ "log",
+ "oxrok-core",
+ "oxrok-scpi",
 ]
 
 [[package]]

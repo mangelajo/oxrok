@@ -120,6 +120,27 @@ unnumbered), which is what the C code was written against; keep the
 byte sequences identical to it rather than reasoning from the chip's
 datasheet. `oxrok_hid::SharedFake` scripts a device for tests.
 
+## SCPI devices
+
+`oxrok-scpi` is the counterpart of libsigrok's `scpi.c` and the
+`scpi_*.c` transports. A driver holds a `Scpi`, asks with
+`get_string`, `get_bool`, `get_int`, `get_f32`, `get_block` and sends
+settings with `send` (plus `get_opc`, or a pause on the DS1000). The
+resource strings are sigrok's (`usbtmc/BUS.ADDR`, `tcp-raw/HOST/PORT`,
+`tcp-rigol/HOST/PORT`, a serial path); `oxrok_scpi::scan` probes every
+USBTMC device when there is no `conn=`. USBTMC needs the interface
+class and endpoints, which `oxrok-usb` now reports before and after
+opening (`UsbDeviceInfo::interfaces`, `Transport::interfaces`).
+
+Fixtures sit above the wire: `OXROK_SCPI_RECORD=FILE` writes the
+messages sent and the responses collected (`send "..."`,
+`response "..."` or `response hex ...`), and `record::Replay` answers
+them back in order. A hand written fixture is a readable statement of
+the command sequence a driver must produce, so write the first one
+from the C code before the instrument is on the desk, then replace it
+with a recording. Long downloads use `read_begin`/`read_data` on the
+`Scpi` directly; `get_block` handles the common IEEE 488.2 case.
+
 ## Beyond libsigrok's keys
 
 A device may do more than libsigrok's key set covers. Two hooks:

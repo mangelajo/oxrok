@@ -11,7 +11,7 @@
 | 6 | decoder runtime, native uart, i2c, spi, Python decoder host, conformance fixtures | done 2026-10-22: runtime, native uart, i2c, spi, stacking and the PyO3 host (all 112 upstream decoders load, checked ones identical to sigrok-cli); UART, I2C and SPI fixtures from the bench |
 | 6a | LogicPort extras: trigger counts, durations, value ranges, or/and combines, clock qualifier, sample point, inversion, frequency counter | done 2026-10-22: `-t` grammar in core, options on the device, 60 bench checks pass; the verification below is still open |
 | 6b | serial transport and the serial multimeter family | done 2026-10-23: `oxrok-serial` with record and replay, `oxrok-dmm` with 20 chipset parsers, all 69 meters; UT61E and UT60A streams from the ESP32 identical to sigrok-cli; HID cables (`oxrok-hid`, BU-86X, CH9325, CP2110, Victor) added the same day, unverified for want of a cable |
-| 6c | SCPI transport (USBTMC, TCP, serial) and the first scope driver (`rigol-ds`) | a Rigol scope captures frames; replay fixtures for the other SCPI drivers |
+| 6c | SCPI transport (USBTMC, TCP, serial) and the first scope driver (`rigol-ds`) | code done 2026-10-23: `oxrok-scpi` with record and replay, `rigol-ds` with all 61 models and a DS1000E replay test; open: a real run on the user's DS1102E, then `--show` and frame output compared with sigrok-cli |
 | 6d | the remaining USB logic analyzers, one per recording | each ships a replay fixture; bench runs where the device is at hand |
 | 7 | packaging: static binaries, Homebrew, AUR, udev rules | a clean machine installs and captures without any sigrok package |
 | 8 | release 0.1 | tags, changelog, guides |
@@ -46,3 +46,9 @@ Hardware checks not yet done, with what each needs:
   (an ESP32-S2/S3 or RP2040) enumerating with one of the cables' USB
   ids and replaying a meter would verify them the way the ESP32 does
   for serial meters; the `EMIT` idea carries over.
+- `rigol-ds` on the DS1102E: plug the scope in, run
+  `oxrok -d rigol-ds --show` and `oxrok -d rigol-ds --frames 1 -O analog`
+  with `OXROK_SCPI_RECORD` set, compare with sigrok-cli, and turn the
+  recording into the replay fixture. The DS1000 memory source (1 M
+  points per channel over USBTMC) and the firmware version split
+  (bare bytes before 0.2.4) are untested.

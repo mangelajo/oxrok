@@ -105,6 +105,11 @@ pub fn format_value(
 
 impl Output for Analog {
     fn receive(&mut self, packet: &Packet, out: &mut Vec<u8>) -> Result<()> {
+        match packet {
+            Packet::FrameBegin => out.extend_from_slice(b"FRAME-BEGIN\n"),
+            Packet::FrameEnd => out.extend_from_slice(b"FRAME-END\n"),
+            _ => {}
+        }
         if let Packet::Meta(items) = packet {
             if !self.meta {
                 return Ok(());
