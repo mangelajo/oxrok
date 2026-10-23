@@ -25,7 +25,7 @@ use crate::decode::{
 };
 use pyo3::exceptions::PyEOFError;
 use pyo3::prelude::*;
-use pyo3::types::{PyBytes, PyDict, PyList, PyString, PyTuple};
+use pyo3::types::{PyBytes, PyDict, PyInt, PyList, PyString, PyTuple};
 use std::path::PathBuf;
 use std::sync::{Arc, OnceLock};
 
@@ -348,6 +348,16 @@ fn py_to_item(obj: &Bound<'_, PyAny>) -> Item {
     if let Ok(i) = obj.extract::<i64>() {
         return Item::Int(i);
     }
+    // A wider int: keep every bit instead of letting it become a float.
+    if obj.is_instance_of::<PyInt>() {
+        let bytes = obj
+            .call_method0("bit_length")
+            .and_then(|n| n.extract::<usize>())
+            .and_then(|n| obj.call_method1("to_bytes", (n.div_ceil(8), "big")));
+        if let Ok(Ok(b)) = bytes.as_ref().map(|b| b.cast::<PyBytes>()) {
+            return Item::BigUint(b.as_bytes().to_vec());
+        }
+    }
     if let Ok(f) = obj.extract::<f64>() {
         return Item::Float(f);
     }
@@ -364,6 +374,9 @@ fn item_to_py<'py>(py: Python<'py>, item: &Item) -> PyResult<Bound<'py, PyAny>> 
     Ok(match item {
         Item::Str(s) => PyString::new(py, s).into_any(),
         Item::Int(i) => i.into_pyobject(py)?.into_any(),
+        Item::BigUint(b) => {
+            py.get_type::<PyInt>().call_method1("from_bytes", (PyBytes::new(py, b), "big"))?
+        }
         Item::Float(f) => f.into_pyobject(py)?.into_any(),
         Item::Bool(b) => pyo3::types::PyBool::new(py, *b).to_owned().into_any(),
         Item::None => py.None().into_bound(py),
@@ -570,5 +583,27 @@ impl Decoder for PyDecoder {
             let data = item_to_py(py, item)?;
             obj.call_method1("decode", (ss, es, data)).map(|_| ())
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Item, item_to_py, py_to_item};
+    use pyo3::prelude::*;
+
+    #[test]
+    fn wide_integers_cross_into_python_and_back_intact() {
+        Python::attach(|py| {
+            // 2^152 - 1, the largest 152 bit SPI word.
+            let item = Item::BigUint(vec![0xff; 19]);
+            let obj = item_to_py(py, &item).unwrap();
+            assert_eq!(
+                obj.str().unwrap().to_string(),
+                "5708990770823839524233143877797980545530986495"
+            );
+            assert!(matches!(py_to_item(&obj), Item::BigUint(ref b) if b == &vec![0xff; 19]));
+            let small = 42i64.into_pyobject(py).unwrap().into_any();
+            assert!(matches!(py_to_item(&small), Item::Int(42)));
+        });
     }
 }

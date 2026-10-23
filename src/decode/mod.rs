@@ -49,6 +49,10 @@ pub enum Item {
     Str(String),
     /// An integer.
     Int(i64),
+    /// A non-negative integer too wide for `Int`, as big-endian bytes
+    /// without leading zeros; Python integers have no width limit and
+    /// an SPI word can be 152 bits.
+    BigUint(Vec<u8>),
     /// A float.
     Float(f64),
     /// A list of items.
@@ -187,6 +191,7 @@ impl std::fmt::Display for Item {
         match self {
             Item::Str(s) => write!(f, "'{s}'"),
             Item::Int(v) => write!(f, "{v}"),
+            Item::BigUint(b) => write!(f, "{}", big_decimal(b)),
             Item::Float(v) => write!(f, "{v}"),
             Item::Bool(b) => write!(f, "{b}"),
             Item::None => write!(f, "None"),
@@ -204,6 +209,28 @@ impl std::fmt::Display for Item {
             }
         }
     }
+}
+
+/// A big-endian unsigned integer in decimal, as Python prints it.
+fn big_decimal(bytes: &[u8]) -> String {
+    let mut n: Vec<u8> = bytes.iter().copied().skip_while(|&b| b == 0).collect();
+    if n.is_empty() {
+        return "0".into();
+    }
+    let mut digits = Vec::new();
+    while !n.is_empty() {
+        let mut rem = 0u32;
+        for b in &mut n {
+            let cur = (rem << 8) | u32::from(*b);
+            *b = (cur / 10) as u8;
+            rem = cur % 10;
+        }
+        digits.push(b'0' + rem as u8);
+        let lead = n.iter().take_while(|&&b| b == 0).count();
+        n.drain(..lead);
+    }
+    digits.reverse();
+    String::from_utf8(digits).unwrap_or_default()
 }
 
 /// The configuration of one instance.
@@ -330,10 +357,16 @@ pub fn parse_spec(
             .chain(info.optional_channels.iter())
             .position(|c| c.id.eq_ignore_ascii_case(key))
         {
-            assigned[pos] = true;
-            config.channels[pos] = channel_names.iter().position(|n| n == value);
-            if config.channels[pos].is_none() {
-                log::warn!("No channel with name \"{value}\" found.");
+            // sigrok-cli drops a name that matches no channel before it
+            // builds the mapping, so it neither assigns the channel nor
+            // cancels the defaults: with no valid name at all, every
+            // channel keeps its default.
+            match channel_names.iter().position(|n| n == value) {
+                Some(index) => {
+                    assigned[pos] = true;
+                    config.channels[pos] = Some(index);
+                }
+                None => log::warn!("No channel with name \"{value}\" found."),
             }
             continue;
         }
@@ -635,5 +668,50 @@ impl Context for ThreadContext {
             name: name.to_owned(),
             item,
         });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_spec;
+    use crate::decoders::i2c::INFO;
+
+    fn names(n: &[&str]) -> Vec<String> {
+        n.iter().map(|s| (*s).to_string()).collect()
+    }
+
+    fn pairs(p: &[(&str, &str)]) -> Vec<(String, String)> {
+        p.iter().map(|(k, v)| ((*k).to_string(), (*v).to_string())).collect()
+    }
+
+    #[test]
+    fn wide_integers_print_in_decimal() {
+        use super::Item;
+        assert_eq!(Item::BigUint(vec![]).to_string(), "0");
+        assert_eq!(Item::BigUint(vec![0x01, 0x00]).to_string(), "256");
+        // 2^64 and 2^152 - 1, the largest 152 bit SPI word.
+        let mut two64 = vec![1u8];
+        two64.extend([0u8; 8]);
+        assert_eq!(Item::BigUint(two64).to_string(), "18446744073709551616");
+        assert_eq!(
+            Item::BigUint(vec![0xff; 19]).to_string(),
+            "5708990770823839524233143877797980545530986495"
+        );
+    }
+
+    #[test]
+    fn unknown_channel_names_keep_the_defaults_as_in_sigrok_cli() {
+        let ch = names(&["SCL", "SDA"]);
+        let cfg = parse_spec(&INFO, &pairs(&[("scl", "0"), ("sda", "1")]), &ch).unwrap();
+        assert_eq!(cfg.channels, vec![Some(0), Some(1)]);
+    }
+
+    #[test]
+    fn one_valid_name_cancels_the_other_defaults() {
+        let ch = names(&["SCL", "SDA"]);
+        let err = parse_spec(&INFO, &pairs(&[("scl", "SDA"), ("sda", "nope")]), &ch).unwrap_err();
+        assert!(err.to_string().contains("needs channel 'sda'"), "{err}");
+        let cfg = parse_spec(&INFO, &pairs(&[("scl", "SDA"), ("sda", "SCL")]), &ch).unwrap();
+        assert_eq!(cfg.channels, vec![Some(1), Some(0)]);
     }
 }

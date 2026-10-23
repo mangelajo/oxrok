@@ -8,6 +8,8 @@ use crate::core::{Channel, ChannelKind, Error, Key, Packet, Result};
 use std::collections::HashMap;
 
 mod analog;
+/// SI prefix selection for analog values, as libsigrok's `sr_analog_si_prefix`.
+pub use analog::si_prefix;
 mod ascii;
 mod binary;
 mod bits;

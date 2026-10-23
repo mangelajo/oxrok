@@ -129,9 +129,19 @@ pub fn parse_boolstring(text: &str) -> bool {
 }
 
 /// Parses a period like `10ms`, `2.5 us`, `1 s` into a rational number of
-/// seconds (p, q).
+/// seconds (p, q). The units are libsigrok's: `s` down to `fs`.
 pub fn parse_period(text: &str) -> Option<(u64, u64)> {
-    parse_rational(text, &[("s", 1), ("ms", 1_000), ("us", 1_000_000), ("ns", 1_000_000_000)])
+    parse_rational(
+        text,
+        &[
+            ("s", 1),
+            ("ms", 1_000),
+            ("us", 1_000_000),
+            ("ns", 1_000_000_000),
+            ("ps", 1_000_000_000_000),
+            ("fs", 1_000_000_000_000_000),
+        ],
+    )
 }
 
 /// Parses a voltage like `500mV`, `2 V` into a rational number of volts.
@@ -143,6 +153,10 @@ fn parse_rational(text: &str, units: &[(&str, u64)]) -> Option<(u64, u64)> {
     let s = text.trim();
     let end = s.find(|c: char| !c.is_ascii_digit() && c != '.').unwrap_or(s.len());
     let number = &s[..end];
+    // A unit alone is no value: libsigrok needs digits before the unit.
+    if !number.bytes().any(|c| c.is_ascii_digit()) {
+        return None;
+    }
     let unit = s[end..].trim().to_ascii_lowercase();
     let (_, divisor) = units.iter().find(|(u, _)| *u == unit)?;
     let (int, frac) = number.split_once('.').unwrap_or((number, ""));

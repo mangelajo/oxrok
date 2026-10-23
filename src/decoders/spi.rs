@@ -95,12 +95,53 @@ fn boxed() -> Box<dyn Decoder> {
     Box::new(Spi::default())
 }
 
+use std::fmt::Write as _;
+
+/// A word of any width, big-endian, as libsigrokdecode keeps it in a
+/// Python integer: `wordsize` can exceed 64 bits.
+#[derive(Clone, Default, PartialEq, Eq, Debug)]
+struct WordValue(Vec<u8>);
+
+impl WordValue {
+    fn zero(bits: u32) -> Self {
+        WordValue(vec![0; (bits as usize).div_ceil(8)])
+    }
+
+    fn set_bit(&mut self, bit: u32) {
+        let n = self.0.len();
+        self.0[n - 1 - (bit / 8) as usize] |= 1 << (bit % 8);
+    }
+
+    /// The value as Python's `'%02X' % value` prints it.
+    fn hex(&self) -> String {
+        let s = self.0.iter().fold(String::new(), |mut acc, b| {
+            let _ = write!(acc, "{b:02X}");
+            acc
+        });
+        let t = s.trim_start_matches('0');
+        if t.len() >= 2 { t.to_owned() } else { format!("{t:0>2}") }
+    }
+
+    fn item(&self) -> Item {
+        let significant: Vec<u8> = self.0.iter().copied().skip_while(|&b| b == 0).collect();
+        if significant.len() <= 8 {
+            let mut v = [0u8; 8];
+            v[8 - significant.len()..].copy_from_slice(&significant);
+            let v = u64::from_be_bytes(v);
+            if let Ok(i) = i64::try_from(v) {
+                return Item::Int(i);
+            }
+        }
+        Item::BigUint(significant)
+    }
+}
+
 /// A decoded word: start, end, value.
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 struct Word {
     ss: u64,
     es: u64,
-    val: u64,
+    val: WordValue,
 }
 
 /// The SPI decoder.
@@ -116,8 +157,8 @@ pub struct Spi {
     have_mosi: bool,
     have_cs: bool,
     bitcount: u32,
-    misodata: u64,
-    mosidata: u64,
+    misodata: WordValue,
+    mosidata: WordValue,
     /// Bits most recent first: value, ss, es.
     misobits: Vec<(u8, u64, u64)>,
     mosibits: Vec<(u8, u64, u64)>,
@@ -147,37 +188,30 @@ impl Spi {
         )
     }
 
-    fn word_bytes(&self, v: u64) -> Vec<u8> {
-        let bw = (self.wordsize as usize).div_ceil(8);
-        v.to_be_bytes()[8 - bw..].to_vec()
-    }
-
     fn putdata(&mut self, ctx: &mut dyn Context) {
         let mut ss = 0;
         let mut es = 0;
         if self.have_miso {
             ss = self.misobits[self.misobits.len() - 1].1;
             es = self.misobits[0].2;
-            let bytes = self.word_bytes(self.misodata);
-            ctx.put_binary(ss, es, 0, bytes);
+            ctx.put_binary(ss, es, 0, self.misodata.0.clone());
         }
         if self.have_mosi {
             ss = self.mosibits[self.mosibits.len() - 1].1;
             es = self.mosibits[0].2;
-            let bytes = self.word_bytes(self.mosidata);
-            ctx.put_binary(ss, es, 1, bytes);
+            ctx.put_binary(ss, es, 1, self.mosidata.0.clone());
         }
-        let miso_val = if self.have_miso { Item::Int(self.misodata as i64) } else { Item::None };
-        let mosi_val = if self.have_mosi { Item::Int(self.mosidata as i64) } else { Item::None };
+        let miso_val = if self.have_miso { self.misodata.item() } else { Item::None };
+        let mosi_val = if self.have_mosi { self.mosidata.item() } else { Item::None };
         let miso_bits = if self.have_miso { Self::bits_item(&self.misobits) } else { Item::None };
         let mosi_bits = if self.have_mosi { Self::bits_item(&self.mosibits) } else { Item::None };
         ctx.put_python(ss, es, Item::List(vec![Item::Str("BITS".into()), mosi_bits, miso_bits]));
         ctx.put_python(ss, es, Item::List(vec![Item::Str("DATA".into()), mosi_val, miso_val]));
         if self.have_miso {
-            self.misobytes.push(Word { ss, es, val: self.misodata });
+            self.misobytes.push(Word { ss, es, val: self.misodata.clone() });
         }
         if self.have_mosi {
-            self.mosibytes.push(Word { ss, es, val: self.mosidata });
+            self.mosibytes.push(Word { ss, es, val: self.mosidata.clone() });
         }
         if self.have_miso {
             for &(b, bss, bes) in &self.misobits {
@@ -190,16 +224,16 @@ impl Spi {
             }
         }
         if self.have_miso {
-            ctx.put_ann(ss, es, 0, vec![format!("{:02X}", self.misodata)]);
+            ctx.put_ann(ss, es, 0, vec![self.misodata.hex()]);
         }
         if self.have_mosi {
-            ctx.put_ann(ss, es, 1, vec![format!("{:02X}", self.mosidata)]);
+            ctx.put_ann(ss, es, 1, vec![self.mosidata.hex()]);
         }
     }
 
     fn reset_word(&mut self) {
-        self.misodata = 0;
-        self.mosidata = 0;
+        self.misodata = WordValue::zero(self.wordsize);
+        self.mosidata = WordValue::zero(self.wordsize);
         self.misobits.clear();
         self.mosibits.clear();
         self.bitcount = 0;
@@ -213,11 +247,11 @@ impl Spi {
         }
         let ws = self.wordsize;
         let shift = if self.msb_first { ws - 1 - self.bitcount } else { self.bitcount };
-        if self.have_miso {
-            self.misodata |= u64::from(miso) << shift;
+        if self.have_miso && miso {
+            self.misodata.set_bit(shift);
         }
-        if self.have_mosi {
-            self.mosidata |= u64::from(mosi) << shift;
+        if self.have_mosi && mosi {
+            self.mosidata.set_bit(shift);
         }
         let mut es = s;
         if self.bitcount > 0 {
@@ -281,9 +315,7 @@ impl Spi {
                 self.misobytes.clear();
                 self.mosibytes.clear();
             } else if let Some(ss) = self.ss_transfer {
-                let join = |w: &[Word]| {
-                    w.iter().map(|x| format!("{:02X}", x.val)).collect::<Vec<_>>().join(" ")
-                };
+                let join = |w: &[Word]| w.iter().map(|x| x.val.hex()).collect::<Vec<_>>().join(" ");
                 if self.have_miso {
                     ctx.put_ann(ss, s, 5, vec![join(&self.misobytes)]);
                 }
@@ -297,7 +329,7 @@ impl Spi {
                                 Item::List(vec![
                                     Item::Int(x.ss as i64),
                                     Item::Int(x.es as i64),
-                                    Item::Int(x.val as i64),
+                                    x.val.item(),
                                 ])
                             })
                             .collect(),
@@ -342,9 +374,10 @@ impl Decoder for Spi {
             active_low: config.str("cs_polarity", "active-low") == "active-low",
             mode: (cpol * 2 + cpha) as u8,
             msb_first: config.str("bitorder", "msb-first") == "msb-first",
-            wordsize: config.int("wordsize", 8).clamp(1, 64) as u32,
+            wordsize: u32::try_from(config.int("wordsize", 8).max(1)).unwrap_or(u32::MAX),
             ..Spi::default()
         };
+        self.reset_word();
         Ok(())
     }
 
@@ -381,5 +414,39 @@ impl Decoder for Spi {
             let cs_matched = self.have_cs && ctx.matched().get(1).copied().unwrap_or(false);
             self.find_clk_edge(ctx, tuple(&pins), false, cs_matched);
         }
+    }
+}
+
+#[cfg(test)]
+mod word_tests {
+    use super::WordValue;
+    use crate::decode::Item;
+
+    fn word(bits: u32, set: &[u32]) -> WordValue {
+        let mut w = WordValue::zero(bits);
+        for &b in set {
+            w.set_bit(b);
+        }
+        w
+    }
+
+    #[test]
+    fn hex_is_pythons_percent_02x() {
+        assert_eq!(word(8, &[]).hex(), "00");
+        assert_eq!(word(8, &[0]).hex(), "01");
+        assert_eq!(word(16, &[0]).hex(), "01");
+        assert_eq!(word(16, &[8]).hex(), "100");
+        assert_eq!(word(9, &[8, 0]).hex(), "101");
+        assert_eq!(word(152, &[151, 0]).hex(), format!("8{}1", "0".repeat(36)));
+    }
+
+    #[test]
+    fn items_stay_ints_while_they_fit() {
+        assert!(matches!(word(8, &[7]).item(), Item::Int(128)));
+        assert!(matches!(word(64, &[62]).item(), Item::Int(i) if i == 1 << 62));
+        assert!(
+            matches!(word(64, &[63]).item(), Item::BigUint(ref b) if b == &[0x80, 0, 0, 0, 0, 0, 0, 0])
+        );
+        assert!(matches!(word(152, &[100]).item(), Item::BigUint(ref b) if b.len() == 13));
     }
 }

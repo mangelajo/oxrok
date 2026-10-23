@@ -10,6 +10,23 @@ release may change the library API.
 
 - Installation notes for the `python` feature in the README and the
   crate documentation.
+- `tests/libsigrok_parity.rs`: the value tables of libsigrok's own unit
+  tests (sample rate, period and voltage strings, SI prefixes, unit
+  strings, the binary input, module listings, the demo sample rate,
+  triggers, version) run against oxrok.
+
+### Fixed
+
+- Periods take `ps` and `fs` like libsigrok, and a unit without digits
+  (`-c timebase=ms`) is rejected instead of read as zero.
+- A decoder channel mapped to a name that matches no channel no longer
+  cancels the default mapping: as in sigrok-cli, the name is skipped
+  with a warning and, when no name matched, every channel keeps its
+  default.
+- The native `spi` decoder takes word sizes above 64 bits; a 152 bit
+  word came out as two 64 bit words with the rest lost. Integers wider
+  than 64 bits pass between decoders and to Python intact instead of
+  becoming floats.
 
 ## [0.1.0-alpha.1] - 2026-10-23
 
