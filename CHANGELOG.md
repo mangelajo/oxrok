@@ -6,6 +6,11 @@ release may change the library API.
 
 ## [Unreleased]
 
+### Added
+
+- Installation notes for the `python` feature in the README and the
+  crate documentation.
+
 ## [0.1.0-alpha.1] - 2026-10-23
 
 First publication, to claim the name on crates.io. Experimental; see

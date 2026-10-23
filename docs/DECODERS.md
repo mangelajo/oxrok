@@ -55,8 +55,8 @@ and is written from the protocol and the decoder's documented output.
 
 ## Python decoders
 
-With the `python` cargo feature (`cargo install --path .
---features python`) oxrok runs the unchanged `pd.py` files of a
+With the `python` cargo feature (installation in the README) oxrok
+runs the unchanged `pd.py` files of a
 libsigrokdecode installation. The decoders are looked for in
 `OXROK_DECODERS_DIR`, `SIGROKDECODE_DIR`, `~/.local/share/libsigrokdecode/decoders`
 and the system directories. Native decoders take precedence over a

@@ -14,7 +14,38 @@
 //!   native decoders; [`pydecode`] hosts libsigrokdecode's Python
 //!   decoders when built with the `python` feature.
 //!
-//! The command line tool lives behind the `cli` feature.
+//! # Features
+//!
+//! - `cli` (default): the `oxrok` command line tool.
+//! - `nusb` (default) and `libusb`: the USB backends; with both,
+//!   `OXROK_USB_BACKEND` picks one at run time.
+//! - `python`: [`pydecode`], which runs libsigrokdecode's Python
+//!   decoders unchanged.
+//!
+//! # Installing
+//!
+//! ```text
+//! cargo install oxrok --version 0.1.0-alpha.1 --locked
+//! cargo install oxrok --version 0.1.0-alpha.1 --locked --features python
+//! ```
+//!
+//! The `python` feature needs Python 3.9 or newer with its shared
+//! library at build and at run time (Homebrew or python.org Pythons,
+//! `python3-dev` on Debian and Ubuntu, `python3-devel` on Fedora), and
+//! the decoders of a libsigrokdecode installation (`brew install
+//! libsigrokdecode`, the distribution package, or a checkout). The build
+//! takes the interpreter from `PYO3_PYTHON`, the active virtualenv, or
+//! `python` and `python3` on `PATH`. Decoders are found in
+//! `OXROK_DECODERS_DIR`, `SIGROKDECODE_DIR`,
+//! `~/.local/share/libsigrokdecode/decoders` and the usual system
+//! directories.
+//!
+//! As a library dependency:
+//!
+//! ```toml
+//! [dependencies]
+//! oxrok = { version = "0.1.0-alpha.1", default-features = false, features = ["nusb"] }
+//! ```
 //!
 //! Every module forbids unsafe code except `pydecode`, which crosses
 //! into Python.

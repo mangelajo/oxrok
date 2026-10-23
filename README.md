@@ -50,7 +50,6 @@ the CP2110 cable are ports with replay tests only. `docs/DEVICES.md`
 has the details per device and `hil/` the firmware used on the bench.
 
 ```sh
-cargo install --path .                             # add --features python for the Python decoders
 oxrok --scan
 oxrok -d demo:logic_channels=4 -g Logic -c pattern=walking-one --samples 20 -O bits
 oxrok -d demo --show
@@ -62,6 +61,56 @@ oxrok -i cap.vcd -P uart:baudrate=115200:rx=D0 -A uart=rx-data
 
 The output after the first header line matches sigrok-cli byte for byte
 for the same command, which is how the test suite checks it.
+
+## Installing
+
+The current release is a pre-release, so name its version:
+
+```sh
+cargo install oxrok --version 0.1.0-alpha.1 --locked
+cargo install --path . --locked                    # from a checkout
+```
+
+`--locked` builds with the dependency versions the release was tested
+with.
+
+### With the Python decoders
+
+The `python` feature runs libsigrokdecode's Python decoders unchanged,
+next to the native `uart`, `i2c` and `spi`. It needs two things:
+
+- Python 3.9 or newer with its shared library, at build time and at
+  run time, since the binary links against the interpreter found when
+  it was built. Homebrew's and python.org's Pythons include the
+  library; on Debian and Ubuntu install `python3-dev`, on Fedora
+  `python3-devel`; on Windows use the python.org installer with Python
+  added to `PATH`.
+- The decoders: `brew install libsigrokdecode`, the libsigrokdecode
+  package of your distribution, or the `decoders` directory of a
+  libsigrokdecode checkout.
+
+```sh
+cargo install oxrok --version 0.1.0-alpha.1 --locked --features python
+PYO3_PYTHON=/usr/bin/python3.12 cargo install oxrok --version 0.1.0-alpha.1 --locked --features python
+```
+
+The build uses `PYO3_PYTHON` when set, else the active virtualenv, else
+`python` or `python3` on `PATH`. Reinstall oxrok after removing or
+upgrading that Python.
+
+Decoders are looked up in `OXROK_DECODERS_DIR`, `SIGROKDECODE_DIR`,
+`~/.local/share/libsigrokdecode/decoders`, then
+`/opt/homebrew/share`, `/usr/local/share` and `/usr/share` (each
+followed by `libsigrokdecode/decoders`). To check the setup:
+
+```sh
+oxrok -L                       # lists the Python decoders too
+oxrok -P can --show            # a decoder with no native version
+oxrok -i capture.sr -P uart:baudrate=31250,midi -A midi
+```
+
+A native decoder takes precedence over a Python one with the same id.
+`docs/DECODERS.md` describes the host.
 
 ## Layout
 
