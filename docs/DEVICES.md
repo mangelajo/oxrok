@@ -118,7 +118,7 @@ Linux the user needs read and write access to the `/dev/hidraw*` node
 scan without `conn=`; an unplugged default cable is simply not found.
 
 Verified 2026-10-23 with a Raspberry Pi Pico running the cable emulator
-in `pico/hidcable` of the LogicPort driver tree: it enumerates as the
+in `hil/pico-hidcable`: it enumerates as the
 BU-86X, the CH9325 or the Victor cable (`MODE bu86x|ch9325|victor` on
 its USB serial port, `PACKET hex`, `PERIOD ms`, `SAVE`; `cable.sh`
 sends the commands) and plays a meter packet. `brymen-bm86x` on the
@@ -168,7 +168,7 @@ libsigrok reaches the PICkit2 with raw USB transfers, which macOS does
 not allow on a HID; oxrok speaks HID reports instead, so it works on
 every platform. Both drivers were verified against the Pico emulator
 (`MODE usbrelay`, `MODE pickit2`, which plays a counter on the three
-pins); the user's real PICkit2 is the next check.
+pins; firmware in `hil/pico-hidcable`); the user's real PICkit2 is the next check.
 
 ## Raspberry Pi Pico (sigrok-pico firmware)
 

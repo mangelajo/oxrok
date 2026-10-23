@@ -2,3 +2,4 @@
 Cargo.lock.orig
 *.swp
 .DS_Store
+.pio/

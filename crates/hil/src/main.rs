@@ -1,7 +1,7 @@
 //! Hardware in the loop checks for the LogicPort driver.
 //!
 //! Runs captures through the library against a LogicPort while the ESP32
-//! signal generator (`esp32/siggen` in the sigrok driver repository)
+//! signal generator (`hil/esp32-siggen`)
 //! drives the inputs. Wiring: GPIO25 -> D0, GPIO26 -> D1, GPIO27 -> D2,
 //! GPIO14 -> CLK1, GND -> GND, plus the wide map listed in `wide`.
 //!

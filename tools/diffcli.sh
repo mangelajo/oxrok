@@ -197,11 +197,11 @@ if [ $hw = 1 ]; then
     gen --cmd "EMIT 200 60 1720354d5b617f8297a0b0c0d4e0"
     case_ "serial dmm fs9721" -- -d uni-t-ut60a-ser:conn=$DMMPORT:serialcomm=921600/8n1 --samples 2
     gen --cmd "EMIT 0 0"
-    # HID cables: the Pico emulator (pico/hidcable in the LogicPort
-    # driver tree) switches cable type on its serial port and reboots,
+    # HID cables: the Pico emulator (hil/pico-hidcable) switches cable
+    # type on its serial port and reboots,
     # so each mode change waits for the new device. Skipped when the
     # emulator's port is absent.
-    CABLE=${CABLE:-$(dirname "$0")/../../sigrok-intronix-driver/pico/hidcable/cable.sh}
+    CABLE=${CABLE:-$(dirname "$0")/../hil/pico-hidcable/cable.sh}
     if [ -x "$CABLE" ] && ls /dev/cu.usbmodemHIDCABLE* >/dev/null 2>&1; then
         cable() { "$CABLE" "$@" > /dev/null 2>&1; }
         mode() { cable "MODE $1"; sleep 6; }
