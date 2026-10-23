@@ -10,6 +10,7 @@ authors.workspace = true
 
 [dependencies]
 oxrok-core.workspace = true
+oxrok-hid.workspace = true
 log.workspace = true
 serialport = { version = "4", default-features = false }
 

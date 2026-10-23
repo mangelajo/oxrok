@@ -17,7 +17,9 @@
 //! Every supported meter is its own driver id (`uni-t-ut61e-ser`,
 //! `voltcraft-vc820-ser`, ...), as in sigrok, since nothing in the
 //! byte stream says which meter is talking. A scan needs `conn=` with
-//! the serial port; `serialcomm=` overrides the cable's parameters. The
+//! the serial port, except for the meters whose cable is a USB HID
+//! adapter (`hid/bu86x`, `hid/victor`), which are found on their own;
+//! `serialcomm=` overrides the cable's parameters. The
 //! scan listens for up to three seconds for a packet that the chipset
 //! parser accepts, and acquisition then streams one analog packet per
 //! reading until the sample or time limit, or until stopped.
@@ -100,11 +102,23 @@ impl Driver for SerialDmmDriver {
                 other => return Err(Error::UnknownKey(other.id().to_owned())),
             }
         }
-        let Some(conn) = conn else {
-            return Ok(Vec::new());
+        let given = conn.is_some();
+        let conn = match conn {
+            Some(c) => c,
+            None if !self.0.conn.is_empty() => self.0.conn.to_owned(),
+            None => return Ok(Vec::new()),
         };
         let params = Params::parse(&serialcomm)?;
-        let mut port = oxrok_serial::open(&conn, params)?;
+        let mut port = match oxrok_serial::open(&conn, params) {
+            Ok(p) => p,
+            // A default cable that is not plugged in is not an error.
+            Err(e) if !given => {
+                log::debug!("{}: {e}", self.0.id);
+                return Ok(Vec::new());
+            }
+            Err(e) => return Err(e),
+        };
+        let conn = port.name().to_owned();
         log::info!("Probing serial port {conn}.");
         let found = detect(port.as_mut(), &self.0.protocol, DETECT_TIMEOUT)?;
         if !found {

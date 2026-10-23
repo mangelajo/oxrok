@@ -15,7 +15,7 @@
 
 use oxrok_dmm::lcd::Fs9721Symbols;
 use oxrok_dmm::ranged::Es519xx;
-use oxrok_dmm::{Protocol, Reading, ascii, lcd, ranged, segments};
+use oxrok_dmm::{Protocol, Reading, ascii, brymen, lcd, ranged, segments};
 
 /// One supported meter.
 pub struct Model {
@@ -25,7 +25,11 @@ pub struct Model {
     pub vendor: &'static str,
     /// The model, with the cable when it matters.
     pub model: &'static str,
-    /// The serial parameters of the cable.
+    /// The port to open when the scan gets no `conn=`: a HID cable
+    /// name for the meters that come with one, else empty.
+    pub conn: &'static str,
+    /// The serial parameters of the cable. Cables on HID adapters that
+    /// have no settable line ignore them.
     pub serialcomm: &'static str,
     /// The chipset protocol.
     pub protocol: Protocol,
@@ -135,6 +139,22 @@ const BM25X: Protocol =
     protocol(segments::BM25X_SIZE, segments::bm25x_valid, single!(segments::bm25x_parse));
 const QM1578: Protocol =
     protocol(segments::QM1578_SIZE, segments::qm1578_valid, single!(segments::qm1578_parse));
+const BM52X: Protocol = Protocol {
+    packet_size: brymen::BRYMEN_SIZE,
+    channels: brymen::BRYMEN_DISPLAYS,
+    channel_names: &[],
+    valid: brymen::bm52x_valid,
+    parse: brymen::bm52x_parse,
+    request: Some(brymen::BM52X_REQUEST),
+};
+const BM82X: Protocol =
+    Protocol { valid: brymen::bm82x_valid, request: Some(brymen::BM82X_REQUEST), ..BM52X };
+const BM86X: Protocol = Protocol {
+    valid: brymen::bm86x_valid,
+    parse: brymen::bm86x_parse,
+    request: Some(brymen::BM86X_REQUEST),
+    ..BM52X
+};
 
 const fn m(
     id: &'static str,
@@ -143,12 +163,26 @@ const fn m(
     serialcomm: &'static str,
     protocol: Protocol,
 ) -> Model {
-    Model { id, vendor, model, serialcomm, protocol, request_timeout_ms: 0, request_delay_ms: 0 }
+    Model {
+        id,
+        vendor,
+        model,
+        conn: "",
+        serialcomm,
+        protocol,
+        request_timeout_ms: 0,
+        request_delay_ms: 0,
+    }
 }
 
 const fn timed(mut model: Model, timeout_ms: u64, delay_ms: u64) -> Model {
     model.request_timeout_ms = timeout_ms;
     model.request_delay_ms = delay_ms;
+    model
+}
+
+const fn on_hid(mut model: Model, conn: &'static str) -> Model {
+    model.conn = conn;
     model
 }
 
@@ -163,6 +197,9 @@ pub static MODELS: &[Model] = &[
     m("digitech-qm1578", "Digitech", "QM1578", "115200/8n1", QM1578),
     m("metrix-mx56c", "Metrix", "MX56C", "2400/8n1", ASYCII),
     m("brymen-bm25x", "Brymen", "BM25x", "9600/8n1/rts=1/dtr=1", BM25X),
+    on_hid(timed(m("brymen-bm52x", "Brymen", "BM52x", "9600/8n1", BM52X), 4000, 500), "hid/bu86x"),
+    on_hid(timed(m("brymen-bm82x", "Brymen", "BM82x", "9600/8n1", BM82X), 4000, 500), "hid/bu86x"),
+    on_hid(timed(m("brymen-bm86x", "Brymen", "BM86x", "9600/8n1", BM86X), 500, 100), "hid/bu86x"),
     m("peaktech-3415", "PeakTech", "3415", "2400/8n1/rts=0/dtr=1", DTM0660),
     m("velleman-dvm4100", "Velleman", "DVM4100", "2400/8n1/rts=0/dtr=1", DTM0660),
     m("iso-tech-idm103n", "ISO-TECH", "IDM103N", "2400/7o1/rts=0/dtr=1", ES519XX_2400_11B),
@@ -236,6 +273,7 @@ pub static MODELS: &[Model] = &[
     m("uni-t-ut61b-ser", "UNI-T", "UT61B (UT-D02 cable)", "2400/8n1/rts=0/dtr=1", FS9922),
     m("uni-t-ut61c-ser", "UNI-T", "UT61C (UT-D02 cable)", "2400/8n1/rts=0/dtr=1", FS9922),
     m("uni-t-ut61d-ser", "UNI-T", "UT61D (UT-D02 cable)", "2400/8n1/rts=0/dtr=1", FS9922),
+    on_hid(m("victor-dmm", "Victor", "Victor DMMs", "2400/8n1", FS9922), "hid/victor"),
     m(
         "voltcraft-vc830-ser",
         "Voltcraft",
@@ -301,5 +339,8 @@ mod tests {
         }
         assert_eq!(find("uni-t-ut61e-ser").unwrap().protocol.packet_size, 14);
         assert_eq!(find("metex-m3860m").unwrap().protocol.channels, 4);
+        assert_eq!(find("brymen-bm86x").unwrap().conn, "hid/bu86x");
+        assert_eq!(find("victor-dmm").unwrap().protocol.packet_size, 14);
+        assert_eq!(MODELS.len(), 64);
     }
 }

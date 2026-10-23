@@ -36,6 +36,7 @@
 
 #![forbid(unsafe_code)]
 
+pub mod hid;
 pub mod record;
 
 use oxrok_core::{Error, Result};
@@ -299,17 +300,23 @@ impl Port for Native {
     }
 }
 
-/// Opens the port `name` with `params`. With `OXROK_SERIAL_RECORD=FILE`
-/// in the environment the session is recorded to that file.
+/// Opens the port `name` with `params`: a device path, or a HID cable
+/// as `hid[/CHIP][/sn=SERIAL]` (see [`hid`]). With
+/// `OXROK_SERIAL_RECORD=FILE` in the environment the session is
+/// recorded to that file.
 pub fn open(name: &str, params: Params) -> Result<Box<dyn Port>> {
-    let native = Native::open(name, params)?;
+    let native: Box<dyn Port> = if hid::is_hid_name(name) {
+        hid::open(name, params)?
+    } else {
+        Box::new(Native::open(name, params)?)
+    };
     if let Ok(file) = std::env::var("OXROK_SERIAL_RECORD")
         && !file.is_empty()
     {
         log::info!("Recording the serial session to {file}.");
-        return Ok(Box::new(record::Recorder::to_file(Box::new(native), params, file)));
+        return Ok(Box::new(record::Recorder::to_file(native, params, file)));
     }
-    Ok(Box::new(native))
+    Ok(native)
 }
 
 /// The serial ports on this machine.

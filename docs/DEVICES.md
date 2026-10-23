@@ -82,10 +82,41 @@ runs until stopped.
 Chipsets ported: FS9721, FS9922, DTM0660, Metex 14 byte (single and
 four display), VC-96, ASYC-II, M2110, UT71x, ES519xx (11 and 14 byte,
 2400 and 19200 baud variants), VC-870, RadioShack 22-812, Brymen BM25x,
-Digitech QM1578: 61 meters. Not yet: the Brymen BM52x, BM82x and BM86x
-and the Victor meters (HID cables), the Brymen BM85x (variable length
-packets), the EEVblog 121GW, the Mastech MS2115B and MS8250D and the
-Meterman 38XR.
+BM52x, BM82x, BM86x, Digitech QM1578: 64 meters. Not yet: the Brymen
+BM85x (variable length packets), the EEVblog 121GW, the Mastech MS2115B
+and MS8250D and the Meterman 38XR, and the recordings a BM52x stores in
+memory.
+
+### HID cables
+
+Some cables are USB HID devices rather than serial ports: the Brymen
+BU-86X infrared adapter (`brymen-bm52x`, `brymen-bm82x`,
+`brymen-bm86x`), the Victor 70C and 86C cable (`victor-dmm`), and the
+WCH CH9325 and Silicon Labs CP2110 UART bridges that other meters'
+cables use. `oxrok-hid` talks to them through `async-hid` (IOHIDManager
+on macOS, hidraw on Linux, Win32 HID on Windows, no C code), and
+`oxrok-serial` wraps each chip's report framing as a port, so the
+meter drivers see a byte stream as with a serial cable. The port name
+follows sigrok:
+
+```
+oxrok -d brymen-bm86x --samples 5                       # finds the adapter on its own
+oxrok -d brymen-bm86x:conn=hid/bu86x/sn=1234 --samples 5
+oxrok -d uni-t-ut61e-ser:conn=hid/ch9325 --samples 5    # a serial meter on a HID bridge
+```
+
+`hid` takes any cable with a known USB id, `hid/CHIP` one of `bu86x`,
+`ch9325`, `cp2110`, `victor`, and `sn=` picks one by serial number. On
+Linux the user needs read and write access to the `/dev/hidraw*` node
+(a udev rule for the cable's USB id). Meters that come with a HID cable
+scan without `conn=`; an unplugged default cable is simply not found.
+
+Unverified: no HID cable was on the bench. The chip framing, the
+Victor unscrambling and both Brymen parsers have tests written from the
+C implementations and the Brymen protocol document; the BM86x request
+and answer also run through the driver in a replay test. A
+microcontroller that enumerates as one of these cables and plays a
+meter would close the gap, as the ESP32 does for serial meters.
 
 Verification without a meter: the parsers have tests built from the
 packet layouts, the driver has replay tests on hand written serial

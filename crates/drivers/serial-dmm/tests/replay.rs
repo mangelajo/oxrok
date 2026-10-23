@@ -109,3 +109,35 @@ fn detection_finds_a_packet_in_noise() {
     // The replay runs out of data: that is an error, not a detection.
     assert!(detect(&mut port, &model.protocol, Duration::from_millis(300)).is_err());
 }
+
+#[test]
+fn bm86x_requests_and_two_displays() {
+    // A BM867s on the BU-86X adapter: the driver asks with four bytes,
+    // the meter answers 24 bytes in three HID reports, which reach the
+    // port as a byte stream. 1.2345 V AC and 50.0 Hz.
+    let mut p = [0u8; 24];
+    p[16..20].copy_from_slice(&[0x86; 4]);
+    for (i, b) in [0x50u8, 0x6d, 0x7c, 0x72, 0x3e].iter().enumerate() {
+        p[3 + i] = b << 1;
+    }
+    p[4] |= 0x01;
+    p[8] |= 0x01;
+    p[2] |= 0x01;
+    p[10] = 0x3e << 1;
+    p[11] = 0x5f << 1;
+    p[12] = (0x5f << 1) | 0x01;
+    p[14] |= 0x04;
+    let fixture = format!(
+        "# oxrok serial fixture 1\nport hid/bu86x 9600/8n1\nwrite 00008666\nread 128 -> {}\nread 128 -> {}\nread 128 -> {}\nwrite 00008666\nread 128 -> -\n",
+        hex(&p[..8]),
+        hex(&p[8..16]),
+        hex(&p[16..])
+    );
+    let out = run("brymen-bm86x", &fixture, 1);
+    assert_eq!(out.len(), 2);
+    assert_eq!((out[0].0, out[0].2, out[0].3, out[0].5), (0, Mq::Voltage, Unit::Volt, 4));
+    assert!((out[0].1 - 1.2345).abs() < 1e-5);
+    assert!(out[0].4.contains(MqFlags::AC));
+    assert_eq!((out[1].0, out[1].2), (1, Mq::Frequency));
+    assert!((out[1].1 - 50.0).abs() < 1e-4);
+}

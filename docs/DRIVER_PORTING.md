@@ -110,6 +110,16 @@ each one tests against packets written from its layout without a
 meter. A validity check should demand a recognised function, not only
 a terminator: fourteen bytes ending in CR LF is also a boot banner.
 
+Serial over HID cables (libsigrok's `serial_hid*.c`) are `Port`s too:
+`oxrok_serial::hid` holds one `Chip` per adapter with its USB ids,
+report framing and parameter report, over the blocking `HidDevice`
+trait of `oxrok-hid`. A port name starting with `hid` goes there from
+`oxrok_serial::open`, so a driver supports every cable at once. The
+report conventions are hidapi's (first byte is the report id, 0 when
+unnumbered), which is what the C code was written against; keep the
+byte sequences identical to it rather than reasoning from the chip's
+datasheet. `oxrok_hid::SharedFake` scripts a device for tests.
+
 ## Beyond libsigrok's keys
 
 A device may do more than libsigrok's key set covers. Two hooks:

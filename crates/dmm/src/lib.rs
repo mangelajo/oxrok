@@ -27,6 +27,7 @@
 )]
 
 pub mod ascii;
+pub mod brymen;
 pub mod lcd;
 pub mod ranged;
 pub mod segments;

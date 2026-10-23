@@ -19,8 +19,13 @@ release may change the library API.
   syntax and record and replay fixtures (`OXROK_SERIAL_RECORD`).
 - `oxrok-dmm`: multimeter packet parsers (FS9721, FS9922, DTM0660, Metex
   14 byte, VC-96, ASYC-II, M2110, UT71x, ES519xx, VC-870, RadioShack
-  22-812, BM25x, QM1578) and `oxrok-driver-serial-dmm` with 61 meter
-  ids, one driver per meter as in sigrok.
+  22-812, BM25x, BM52x, BM82x, BM86x, QM1578) and
+  `oxrok-driver-serial-dmm` with 64 meter ids, one driver per meter as
+  in sigrok.
+- `oxrok-hid`: USB HID transport over `async-hid`, and serial over HID
+  cables in `oxrok-serial` (Brymen BU-86X, WCH CH9325, SiLabs CP2110,
+  Victor), named `hid[/CHIP][/sn=SERIAL]` as in sigrok. Meters that
+  come with such a cable scan without `conn=`.
 - Trigger extras in the shared model and the `-t` grammar: occurrence
   counts (`D0=r*5`, consecutive `D0=r*5c`), durations (`D0=1>100`,
   `D0=1>50us`), value ranges on a channel group (`D0-D2=3..5`,
