@@ -77,6 +77,5 @@ cargo fmt --all --check
 
 ## License
 
-Code written for oxrok is dual licensed under MIT or Apache-2.0, at your
-option. Crates that port code from sigrok keep the GPL and say so in
-their own LICENSE file; none exist yet. See `docs/LICENSING.md`.
+GPL-3.0-or-later, the license of the sigrok code it ports. See
+`docs/LICENSING.md`.

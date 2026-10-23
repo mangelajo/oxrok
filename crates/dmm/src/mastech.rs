@@ -5,8 +5,8 @@
 //   Copyright (C) 2018 Stefan Mandl <stefan.mandl@gmail.com>,
 //   with commits by Uwe Hermann, Gerhard Sittig, Frank Stettner
 //   (libsigrok libsigrok-unreleased-1855-g20baa77f).
-// This file is an independent implementation written for oxrok from the
-//   observed behaviour and the public interfaces.
+// This file is a port of the sigrok counterpart, GPL-3.0-or-later like
+//   it.
 
 //! Mastech meters: the MS2115B clamp meter (9 byte binary packets, two
 //! displays) and the MS8250D (18 byte segment packets).

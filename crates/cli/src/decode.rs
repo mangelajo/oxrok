@@ -3,8 +3,8 @@
 //   Copyright (C) 2013 Bert Vermeulen <bert@biot.com>,
 //   with commits by Gerhard Sittig, Uwe Hermann and others (see the
 //   sigrok-cli history).
-// This file is an independent implementation written for oxrok from the
-//   observed behaviour and the public interfaces.
+// This file is a port of the sigrok counterpart, GPL-3.0-or-later like
+//   it.
 
 //! Protocol decoding in the command line: `-P`, `-A`, `-B` and `-M`.
 

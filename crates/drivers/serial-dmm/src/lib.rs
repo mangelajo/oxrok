@@ -9,8 +9,8 @@
 //   Frank Stettner, Soeren Apel, Rainer Schmid, Mike McCauley,
 //   Alexander Zakharov, Guido Trentalancia, Sebastian Bissbort
 //   (libsigrok libsigrok-unreleased-1855-g20baa77f).
-// This file is an independent implementation written for oxrok from the
-//   observed behaviour and the public interfaces.
+// This file is a port of the sigrok counterpart, GPL-3.0-or-later like
+//   it.
 
 //! Handheld multimeters on a serial cable.
 //!

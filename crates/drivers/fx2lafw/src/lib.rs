@@ -11,8 +11,8 @@
 //   Karl Palsson, Kate J. Temkin, Peetz0r, Thomas, Tilman Sauerbeck,
 //   Valentin Ochs, Vlad Ivanov, eightdot
 //   (libsigrok libsigrok-unreleased-1855-g20baa77f).
-// This file is an independent implementation written for oxrok from the
-//   observed behaviour and the public interfaces.
+// This file is a port of the sigrok counterpart, GPL-3.0-or-later like
+//   it.
 
 //! fx2lafw: logic analyzers built on the Cypress FX2 running the sigrok
 //! `fx2lafw` firmware. The FX2 streams its GPIO port over a bulk

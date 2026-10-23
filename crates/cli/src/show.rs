@@ -5,8 +5,8 @@
 //   Daniel Elstner, Andreas Sandberg, Frank Stettner, Guido Trentalancia,
 //   Jens Steinhauser, Karl Palsson, Martin Ling, Soeren Apel
 //   (sigrok-cli sigrok-cli-unreleased-103-gf44dd91).
-// This file is an independent implementation written for oxrok from the
-//   observed behaviour and the public interfaces.
+// This file is a port of the sigrok counterpart, GPL-3.0-or-later like
+//   it.
 
 //! `--version`, `-L`, `--scan` and `--show`.
 

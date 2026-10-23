@@ -8,6 +8,8 @@ release may change the library API.
 
 ### Changed
 
+- License: the whole workspace is GPL-3.0-or-later, as the sigrok code
+  it ports; the MIT OR Apache-2.0 dual license is gone.
 - The bits and hex outputs drop a trigger marker that falls in the last,
   partial line, as sigrok's do; serial devices and `rigol-ds` show no
   `conn` in `--show`, rational lists print one value per line and

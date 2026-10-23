@@ -6,8 +6,8 @@
 //   Aurelien Jacobs, Devan Lai, Guido Trentalancia, Jens Steinhauser,
 //   Peter Zotov, Vincent Palatin, poljar (Damir Jelić)
 //   (sigrok-cli sigrok-cli-unreleased-103-gf44dd91).
-// This file is an independent implementation written for oxrok from the
-//   observed behaviour and the public interfaces.
+// This file is a port of the sigrok counterpart, GPL-3.0-or-later like
+//   it.
 
 //! The output side shared by captures and file inputs: builds the output
 //! module, feeds it packets, writes the text.

@@ -1,8 +1,8 @@
 // Counterpart in sigrok:
 //   libsigrokdecode (srd.c, decoder.c, instance.c, type_decoder.c: the
 //   Python side of the decoder API).
-// This file is an independent implementation written for oxrok from the
-//   documented decoder API and the observed behaviour.
+// This file is a port of the sigrok counterpart, GPL-3.0-or-later like
+//   it, written from the documented decoder API and the observed behaviour.
 
 //! Runs unchanged `pd.py` decoders from a libsigrokdecode installation.
 //!

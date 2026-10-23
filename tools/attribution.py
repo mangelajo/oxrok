@@ -19,9 +19,8 @@ import sys
 import unicodedata
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-INDEPENDENT = ("an independent implementation written for oxrok from the "
-               "observed behaviour and the public interfaces")
-SAME_AUTHOR = "a port by the same author, relicensed"
+INDEPENDENT = "a port of the sigrok counterpart, GPL-3.0-or-later like it"
+SAME_AUTHOR = "a port by the same author, GPL-3.0-or-later like it"
 
 # Rust file -> (counterparts, relation). A counterpart is a path under
 # SIGROK_SRC, optionally with a note in parentheses, or free text when it
@@ -63,8 +62,8 @@ MAP = {
     "crates/drivers/demo/src/lib.rs": (["libsigrok/src/hardware/demo/api.c",
                                         "libsigrok/src/hardware/demo/protocol.c"], INDEPENDENT),
     "crates/drivers/demo/src/patterns.rs": (["libsigrok/src/hardware/demo/protocol.c"],
-                                            "an independent implementation; the logo bitmap was "
-                                            "replaced by oxrok's own pattern"),
+                                            "a port of the sigrok counterpart, GPL-3.0-or-later like it; "
+                                            "the logo bitmap was replaced by oxrok's own pattern"),
     "crates/drivers/fx2lafw/src/lib.rs": (["libsigrok/src/hardware/fx2lafw/api.c",
                                            "libsigrok/src/hardware/fx2lafw/protocol.c",
                                            "sigrok-firmware-fx2lafw (the command set)"], INDEPENDENT),

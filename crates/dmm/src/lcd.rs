@@ -8,8 +8,8 @@
 //   with commits by Bert Vermeulen, Gerhard Sittig, Daniel Elstner,
 //   Martin Ling, Aurelien Jacobs, Frank Stettner
 //   (libsigrok libsigrok-unreleased-1855-g20baa77f).
-// This file is an independent implementation written for oxrok from the
-//   observed behaviour and the public interfaces.
+// This file is a port of the sigrok counterpart, GPL-3.0-or-later like
+//   it.
 
 //! The Fortune Semiconductor FS9721 and FS9922 and the Dream Tech
 //! DTM0660 chipsets: packets that mirror the LCD, nibble by nibble,

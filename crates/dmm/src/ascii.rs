@@ -10,8 +10,8 @@
 //   with commits by Bert Vermeulen, Daniel Elstner, Martin Ling,
 //   Aurelien Jacobs, Frank Stettner, Soeren Apel
 //   (libsigrok libsigrok-unreleased-1855-g20baa77f).
-// This file is an independent implementation written for oxrok from the
-//   observed behaviour and the public interfaces.
+// This file is a port of the sigrok counterpart, GPL-3.0-or-later like
+//   it.
 
 //! Text protocols: the Metex 14 byte format and the Voltcraft VC-96
 //! and ASYC-II variants of it, and the one line BBC Goertz M2110.

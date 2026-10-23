@@ -4,8 +4,8 @@
 //   with commits by Bert Vermeulen, Uwe Hermann, Gerhard Sittig,
 //   Aurelien Jacobs, Daniel Elstner
 //   (libsigrok libsigrok-unreleased-1855-g20baa77f).
-// This file is an independent implementation written for oxrok from the
-//   observed behaviour and the public interfaces.
+// This file is a port of the sigrok counterpart, GPL-3.0-or-later like
+//   it.
 
 //! SCPI over TCP: raw, where a short read ends a response, and Rigol's
 //! variant where every chunk carries a four byte little endian length.

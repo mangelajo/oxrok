@@ -5,8 +5,8 @@
 //   Copyright (C) 2022 Shawn Walker <ac0bi00@gmail.com>,
 //   with commits by Gerhard Sittig
 //   (libsigrok libsigrok-unreleased-1855-g20baa77f).
-// This file is an independent implementation written for oxrok from the
-//   observed behaviour and the public interfaces.
+// This file is a port of the sigrok counterpart, GPL-3.0-or-later like
+//   it.
 
 //! A Raspberry Pi Pico running the sigrok-pico firmware: up to 32
 //! digital channels and 8 analog channels streamed over its USB serial

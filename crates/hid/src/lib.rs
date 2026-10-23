@@ -2,8 +2,8 @@
 //   libsigrok/src/serial_hid.c (the hidapi calls),
 //   Copyright (C) 2017-2019 Gerhard Sittig <gerhard.sittig@gmx.net>
 //   (libsigrok libsigrok-unreleased-1855-g20baa77f).
-// This file is an independent implementation written for oxrok from the
-//   observed behaviour and the public interfaces.
+// This file is a port of the sigrok counterpart, GPL-3.0-or-later like
+//   it.
 
 //! USB HID transport: list the HID devices on the machine, open one,
 //! and exchange reports with it.

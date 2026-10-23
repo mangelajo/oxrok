@@ -1,8 +1,8 @@
 // Counterpart in sigrok:
 //   libsigrokdecode (the decoder API, instance handling and the sample
 //   matching of wait()).
-// This file is an independent implementation written for oxrok from the
-//   documented decoder API and the observed behaviour.
+// This file is a port of the sigrok counterpart, GPL-3.0-or-later like
+//   it, written from the documented decoder API and the observed behaviour.
 
 //! The protocol decoder runtime.
 //!

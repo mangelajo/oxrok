@@ -1,9 +1,8 @@
 // Counterpart in sigrok:
 //   sigrok-cli/parsers.c (parse_triggerstring),
 //   Copyright (C) 2011 Bert Vermeulen <bert@biot.com>.
-// This file is an independent implementation written for oxrok from the
-//   observed behaviour and the public interfaces, extended with counts,
-//   durations, value ranges and combine modes.
+// This file is a port of the sigrok counterpart, GPL-3.0-or-later like
+//   it, extended with counts, durations, value ranges and combine modes.
 
 //! The `-t` trigger grammar.
 //!

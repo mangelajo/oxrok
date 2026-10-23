@@ -9,8 +9,8 @@
 //   with commits by Martin Ling, Daniel Elstner, Aurelien Jacobs,
 //   Soeren Apel, Frank Stettner, Wolfram Sang
 //   (libsigrok libsigrok-unreleased-1855-g20baa77f).
-// This file is an independent implementation written for oxrok from the
-//   observed behaviour and the public interfaces.
+// This file is a port of the sigrok counterpart, GPL-3.0-or-later like
+//   it.
 
 //! Serial port transport: a small trait over a port, the sigrok
 //! `serialcomm` parameter syntax, and record and replay of a session.

@@ -8,8 +8,8 @@
 //   with commits by Uwe Hermann, Bert Vermeulen, Daniel Elstner,
 //   Gerhard Sittig, Martin Ling, Aurelien Jacobs, Frank Stettner
 //   (libsigrok libsigrok-unreleased-1855-g20baa77f).
-// This file is an independent implementation written for oxrok from the
-//   observed behaviour and the public interfaces.
+// This file is a port of the sigrok counterpart, GPL-3.0-or-later like
+//   it.
 
 //! Binary packets with seven segment digits: the RadioShack 22-812,
 //! the Brymen BM25x and the Digitech QM1578.

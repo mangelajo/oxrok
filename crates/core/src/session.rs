@@ -6,8 +6,8 @@
 //   Aurelien Jacobs, Daniel Glöckner, Frank Stettner, Soeren Apel,
 //   Wolfram Sang
 //   (libsigrok libsigrok-unreleased-1855-g20baa77f).
-// This file is an independent implementation written for oxrok from the
-//   observed behaviour and the public interfaces.
+// This file is a port of the sigrok counterpart, GPL-3.0-or-later like
+//   it.
 
 //! A session runs devices and hands their packets to a consumer.
 

@@ -6,8 +6,8 @@
 //   Copyright (C) 2020 Aurelien Jacobs <aurel@gnuage.org>,
 //   with commits by Uwe Hermann, Frank Stettner
 //   (libsigrok libsigrok-unreleased-1855-g20baa77f).
-// This file is an independent implementation written for oxrok from the
-//   observed behaviour and the public interfaces.
+// This file is a port of the sigrok counterpart, GPL-3.0-or-later like
+//   it.
 
 //! Brymen meters on the BU-86X infrared adapter: the BM520s series
 //! (BM521s, BM525s), the BM820s series and the BM860s series (BM867s,

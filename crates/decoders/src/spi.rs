@@ -4,8 +4,8 @@
 //   Copyright (C) 2012-2014 Uwe Hermann <uwe@hermann-uwe.de>,
 //   with commits by Gerhard Sittig and others (see the libsigrokdecode
 //   history).
-// This file is an independent implementation written for oxrok from the
-//   SPI bus protocol and the decoder's documented classes and texts.
+// This file is a port of the sigrok counterpart, GPL-3.0-or-later like
+//   it, written from the SPI bus protocol and the decoder's documented classes and texts.
 
 //! SPI: words clocked on CLK with optional MISO, MOSI and chip select.
 

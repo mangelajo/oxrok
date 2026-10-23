@@ -8,8 +8,8 @@
 //   Stefan Brüns, Andreas Sandberg, Aurelien Jacobs, Niklas Thorne,
 //   Soeren Apel
 //   (libsigrok libsigrok-unreleased-1855-g20baa77f, sigrok-cli sigrok-cli-unreleased-103-gf44dd91).
-// This file is an independent implementation written for oxrok from the
-//   observed behaviour and the public interfaces.
+// This file is a port of the sigrok counterpart, GPL-3.0-or-later like
+//   it.
 
 //! Configuration values and their kinds.
 

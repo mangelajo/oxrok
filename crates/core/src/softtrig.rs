@@ -4,8 +4,8 @@
 //   with commits by Uwe Hermann, Daniel Elstner, Aurelien Jacobs,
 //   Soeren Apel, luftek
 //   (libsigrok libsigrok-unreleased-1855-g20baa77f).
-// This file is an independent implementation written for oxrok from the
-//   observed behaviour and the public interfaces.
+// This file is a port of the sigrok counterpart, GPL-3.0-or-later like
+//   it.
 
 //! A software trigger for streaming devices: matches a [`Trigger`]
 //! against logic samples on the host, one stage after another.

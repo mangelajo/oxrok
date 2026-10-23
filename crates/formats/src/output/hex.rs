@@ -4,8 +4,8 @@
 //   with commits by Daniel Elstner, Uwe Hermann, Gerhard Sittig,
 //   Joel Holdsworth, Martin Ling, Soeren Apel
 //   (libsigrok libsigrok-unreleased-1855-g20baa77f).
-// This file is an independent implementation written for oxrok from the
-//   observed behaviour and the public interfaces.
+// This file is a port of the sigrok counterpart, GPL-3.0-or-later like
+//   it.
 
 //! `hex`: one line per channel, eight samples per hex byte, first sample
 //! in the most significant bit.

@@ -4,8 +4,8 @@
 //   libsigrok/src/hardware/microchip-pickit2/protocol.h,
 //   Copyright (C) 2018-2019 Gerhard Sittig <gerhard.sittig@gmx.net>
 //   (libsigrok libsigrok-unreleased-1855-g20baa77f).
-// This file is an independent implementation written for oxrok from the
-//   observed behaviour and the public interfaces.
+// This file is a port of the sigrok counterpart, GPL-3.0-or-later like
+//   it.
 
 //! The Microchip PICkit2 programmer as a three channel logic analyzer:
 //! 1024 samples at up to 1 MHz on pins 4 to 6, with a hardware trigger

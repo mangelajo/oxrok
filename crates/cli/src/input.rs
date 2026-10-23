@@ -4,8 +4,8 @@
 //   with commits by Uwe Hermann, Gerhard Sittig, Daniel Elstner, Dan Horák,
 //   Jens Steinhauser, Martin Ling
 //   (sigrok-cli sigrok-cli-unreleased-103-gf44dd91).
-// This file is an independent implementation written for oxrok from the
-//   observed behaviour and the public interfaces.
+// This file is a port of the sigrok counterpart, GPL-3.0-or-later like
+//   it.
 
 //! `-i FILE`: session files and input modules.
 

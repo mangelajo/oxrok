@@ -3,8 +3,8 @@
 //   Copyright (C) 2011-2014 Uwe Hermann <uwe@hermann-uwe.de>,
 //   with commits by Gerhard Sittig and others (see the libsigrokdecode
 //   history).
-// This file is an independent implementation written for oxrok from the
-//   UART framing and the decoder's documented classes and texts.
+// This file is a port of the sigrok counterpart, GPL-3.0-or-later like
+//   it, written from the UART framing and the decoder's documented classes and texts.
 
 //! UART: start bit, 5 to 9 data bits, optional parity, stop bits.
 

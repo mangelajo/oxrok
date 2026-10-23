@@ -4,8 +4,8 @@
 //   with commits by Martin Ling, Bert Vermeulen, Uwe Hermann, Gerhard Sittig,
 //   Soeren Apel, Daniel Elstner, Wolfram Sang, Timo Kokkonen
 //   (libsigrok libsigrok-unreleased-1855-g20baa77f).
-// This file is an independent implementation written for oxrok from the
-//   observed behaviour and the public interfaces.
+// This file is a port of the sigrok counterpart, GPL-3.0-or-later like
+//   it.
 
 //! USBTMC with the USB488 subclass: SCPI messages in bulk transfers
 //! with a twelve byte header.

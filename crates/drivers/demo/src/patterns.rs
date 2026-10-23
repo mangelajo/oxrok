@@ -8,7 +8,8 @@
 //   with commits by Gerhard Sittig, Soeren Apel, Marc Schink, Miklos Marton,
 //   luftek
 //   (libsigrok libsigrok-unreleased-1855-g20baa77f).
-// This file is an independent implementation; the logo bitmap was replaced by
+// This file is a port of the sigrok counterpart, GPL-3.0-or-later like
+//   it; the logo bitmap was replaced by
 //   oxrok's own pattern.
 
 //! The signal patterns of the demo device.

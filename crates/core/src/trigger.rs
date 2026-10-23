@@ -3,8 +3,8 @@
 //   Copyright (C) 2014 Bert Vermeulen <bert@biot.com>,
 //   with commits by Uwe Hermann, Daniel Elstner, Soeren Apel
 //   (libsigrok libsigrok-unreleased-1855-g20baa77f).
-// This file is an independent implementation written for oxrok from the
-//   observed behaviour and the public interfaces.
+// This file is a port of the sigrok counterpart, GPL-3.0-or-later like
+//   it.
 
 //! Trigger definitions.
 //!

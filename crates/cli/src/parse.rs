@@ -5,8 +5,8 @@
 //   Jens Steinhauser, Alexandru Gagniuc, Anatoly Sokolov,
 //   poljar (Damir Jelić)
 //   (sigrok-cli sigrok-cli-unreleased-103-gf44dd91).
-// This file is an independent implementation written for oxrok from the
-//   observed behaviour and the public interfaces.
+// This file is a port of the sigrok counterpart, GPL-3.0-or-later like
+//   it.
 
 //! Parsers for the sigrok-cli argument syntaxes.
 

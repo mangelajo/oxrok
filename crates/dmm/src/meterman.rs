@@ -3,8 +3,8 @@
 //   Copyright (C) 2021 Christian Kulp <cs@kulp.net>,
 //   with commits by Gerhard Sittig
 //   (libsigrok libsigrok-unreleased-1855-g20baa77f).
-// This file is an independent implementation written for oxrok from the
-//   observed behaviour and the public interfaces.
+// This file is a port of the sigrok counterpart, GPL-3.0-or-later like
+//   it.
 
 //! The Meterman 38XR: 15 byte packets of hex digits, with the range
 //! deciding the scale per function.

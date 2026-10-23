@@ -5,8 +5,8 @@
 //   Copyright (C) 2013 Bert Vermeulen <bert@biot.com>,
 //   with commits by Gerhard Sittig, Uwe Hermann, Aurelien Jacobs
 //   (libsigrok libsigrok-unreleased-1855-g20baa77f).
-// This file is an independent implementation written for oxrok from the
-//   observed behaviour and the public interfaces.
+// This file is a port of the sigrok counterpart, GPL-3.0-or-later like
+//   it.
 
 //! The UNI-T UT32x thermometers: three channels (`T1`, `T2`, `T1-T2`),
 //! live readings or the stored ones, on a UT-D04 cable or a serial
