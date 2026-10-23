@@ -430,8 +430,7 @@ mod oxrok_native {
         let mut groups = Vec::with_capacity(spec.len());
         for terms in spec {
             let mut g = Vec::with_capacity(terms.len() / 2);
-            for pair in terms.chunks_exact(2) {
-                let (ch, kind) = (pair[0], pair[1]);
+            for &[ch, kind] in terms.as_chunks::<2>().0 {
                 if ch < 0 {
                     g.push(Cond::Skip(sample(kind)));
                     continue;

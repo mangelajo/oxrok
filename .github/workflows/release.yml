@@ -57,7 +57,8 @@ jobs:
             file oxrok | grep -q 'statically linked'
           fi
           ./oxrok --version
-          ./oxrok -L | grep -q '^  timing '
+          ./oxrok -L > list.txt
+          grep -q '^  timing ' list.txt
           ./oxrok -l 4 -i ../../tests/fixtures/uart-hi.vcd -P timing > timing.ann
           diff timing.ann ../../tests/fixtures/uart-hi-timing.ann
       - uses: actions/upload-artifact@v4

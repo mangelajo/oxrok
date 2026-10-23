@@ -41,9 +41,13 @@ ifneq (,$(or $(findstring -msvc,$(TARGET)),$(findstring -musl,$(TARGET))))
 export RUSTFLAGS += -C target-feature=+crt-static
 endif
 
-# The C parts of RustPython's dependencies need a musl compiler.
+# The C parts of RustPython's dependencies need a musl compiler, and
+# musl-gcc links too, so pymath's -lm finds musl's libm instead of the
+# host's glibc one.
 ifneq (,$(findstring -musl,$(TARGET)))
+TARGET_VAR := $(shell echo $(TARGET) | tr '[:lower:]-' '[:upper:]_')
 export CC_$(subst -,_,$(TARGET)) ?= musl-gcc
+export CARGO_TARGET_$(TARGET_VAR)_LINKER ?= musl-gcc
 endif
 
 export MACOSX_DEPLOYMENT_TARGET ?= 11.0
