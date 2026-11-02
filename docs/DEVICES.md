@@ -277,3 +277,33 @@ reopen and claim), 60 s at 24 MS/s delivering every byte, and `--show`
 identical to sigrok-cli. Trigger and timing checks against the
 signal generator need a wire from the ESP32 to the analyzer; they are
 not run yet.
+
+## Oracle
+
+The sigrok build that `tools/diffcli.sh` and the emulation work of
+phase 9 compare against, built from source under `~/work/sigrok` with
+its own prefix (`~/work/sigrok/install`; `. ~/work/sigrok/env.sh` puts
+it on `PATH` and `LD_LIBRARY_PATH`), so no distribution package is
+involved. Set up 2026-11-02 on Fedora 44:
+
+| Project | Commit | Notes |
+|---|---|---|
+| libserialport | `21b3dfe5f68c205be4086469335fd2fc2ce11ed2` | master, 2024-09-24 |
+| libsigrok | `0bc2487778e660f4d3116729b6f4aee2b1996bb0` | master, 2025-11-20, `0.6.0-git-0bc24877`; built with `CFLAGS="-O0 -g --coverage" LDFLAGS="--coverage"` for the phase 9b gcov reports, `--disable-bindings`; 86 of the 87 drivers enabled, `hp-3478a` off for want of libgpib (linux-gpib is not packaged for Fedora) |
+| libsigrokdecode | `1577c4354b4caba6fcb62d5919a1d4a196ae4512` | the `libsigrokdecode-0.5.3` tag, the decoders oxrok follows (`docs/DECODERS.md`), with two one-line local patches to build against Python 3.14: `python3-embed` added to the module list in `configure.ac`, and the `PyEval_InitThreads()` call removed (a no-op since 3.7, gone in 3.13). master (`71f45144`, 2024-10-01) renamed the uart and spi annotation classes after 0.5.3, and 17 decoder cases differ against it; its library also refuses to load the 0.5.3 decoders |
+| sigrok-cli | `f44dd91347e7ac797cefc23162b9fcf0b7329f1f` | master, 2024-08-26, `0.8.0-git-f44dd91` |
+
+The roadmap's inventory named libsigrok `e6907e1e`, and the
+attribution headers `20baa77f`; neither commit exists on sigrok.org
+or the GitHub mirror, whose tips are both `0bc24877`, so they belong
+to the fork that carries the LogicPort driver. `0bc24877` is the
+upstream base used here until that checkout is available.
+
+Build dependencies, in Fedora's names: `autoconf automake libtool
+pkgconf-pkg-config glib2-devel libzip-devel libusb1-devel libftdi-devel
+hidapi-devel bluez-libs-devel libieee1284-devel nettle-devel
+check-devel python3-devel python3-gobject` (nettle for `rdtech-tc`).
+Each project: `./autogen.sh && ./configure --prefix=$HOME/work/sigrok/install`
+with `PKG_CONFIG_PATH=$HOME/work/sigrok/install/lib/pkgconfig`, in the
+order of the table. The 46 software cases of `tools/diffcli.sh` pass
+against this build.
