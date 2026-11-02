@@ -1826,6 +1826,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "oxrok-emu"
+version = "0.1.0-alpha.1"
+dependencies = [
+ "clap",
+ "ctrlc",
+]
+
+[[package]]
 name = "oxrok-hil"
 version = "0.1.0-alpha.1"
 dependencies = [

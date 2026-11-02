@@ -14,7 +14,10 @@
 //!
 //! The USB id is shared with many V-USB projects, so the vendor and
 //! product strings identify the board, and the board's serial number
-//! comes from its report, which `conn=sn=SERIAL` filters on.
+//! comes from its report, which `conn=sn=SERIAL` filters on. `conn`
+//! also takes `VID.PID` or the device node (`/dev/hidrawN` on Linux),
+//! which is what the device reports as its connection where the
+//! system has one, as libsigrok does.
 
 #![forbid(unsafe_code)]
 
@@ -70,6 +73,7 @@ impl Driver for UsbRelayDriver {
         }
         let mut want_serial = None;
         let mut want_id = None;
+        let mut want_path = None;
         if let Some(c) = &conn {
             if let Some(sn) = c.strip_prefix("sn=") {
                 want_serial = Some(sn.to_owned());
@@ -77,17 +81,30 @@ impl Driver for UsbRelayDriver {
                 && let (Ok(vid), Ok(pid)) = (u16::from_str_radix(v, 16), u16::from_str_radix(p, 16))
             {
                 want_id = Some((vid, pid));
+            } else if c.starts_with('/') {
+                want_path = Some(c.clone());
             } else {
-                return Err(Error::Arg(format!("Invalid conn '{c}': use sn=SERIAL or VID.PID.")));
+                return Err(Error::Arg(format!(
+                    "Invalid conn '{c}': use sn=SERIAL, VID.PID or a device path."
+                )));
             }
         }
         let mut devices: Vec<Box<dyn Device>> = Vec::new();
         for info in crate::hid::list()? {
-            let (vid, pid) = want_id.unwrap_or((VENDOR_ID, PRODUCT_ID));
-            if info.vendor_id != vid || info.product_id != pid {
-                continue;
+            if want_path.is_some() {
+                if info.path != want_path {
+                    continue;
+                }
+            } else {
+                let (vid, pid) = want_id.unwrap_or((VENDOR_ID, PRODUCT_ID));
+                if info.vendor_id != vid || info.product_id != pid {
+                    continue;
+                }
             }
+            // As libsigrok: a device named explicitly is not checked
+            // against the vendor and product strings.
             if want_id.is_none()
+                && want_path.is_none()
                 && (info.manufacturer.as_deref() != Some(VENDOR_STRING)
                     || !info.product.starts_with(PRODUCT_PREFIX))
             {
@@ -108,7 +125,10 @@ impl Driver for UsbRelayDriver {
             if want_serial.as_deref().is_some_and(|s| s != serial) {
                 continue;
             }
-            let conn = format!("{:04x}.{:04x}", info.vendor_id, info.product_id);
+            let conn = info
+                .path
+                .clone()
+                .unwrap_or_else(|| format!("{:04x}.{:04x}", info.vendor_id, info.product_id));
             let vendor = info.manufacturer.clone().unwrap_or_default();
             devices.push(Box::new(UsbRelayDevice::new(
                 dev,

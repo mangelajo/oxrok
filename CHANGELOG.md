@@ -8,6 +8,13 @@ release may change the library API.
 
 ### Added
 
+- The `emu` crate (`oxrok-emu`): a USB/IP device server with a
+  `DeviceModel` trait, attach and detach through Linux's `vhci-hcd`
+  without the usbip tools, a transaction log in the fixture dialect
+  and pedantic checks on what the host sends. The dcttech relay board
+  is the first model; `tools/diffcli.sh --emu` runs sigrok-cli and
+  oxrok against it and compares output and transactions
+  (`docs/USB.md`).
 - The `rustpython` feature: libsigrokdecode's Python decoders on a
   RustPython 0.6.0 interpreter built into the binary, with its
   standard library frozen in, so no Python installation is needed.
@@ -36,6 +43,10 @@ release may change the library API.
 
 ### Fixed
 
+- HID on Linux: the product string is the USB device's own, as hidapi
+  reports it, not the kernel's joined "manufacturer product" name, so
+  `dcttech-usbrelay` finds its board on Linux; `conn` is the hidraw
+  node there, as under libsigrok, and `conn=/dev/hidrawN` is accepted.
 - Periods take `ps` and `fs` like libsigrok, and a unit without digits
   (`-c timebase=ms`) is rejected instead of read as zero.
 - A decoder channel mapped to a name that matches no channel no longer

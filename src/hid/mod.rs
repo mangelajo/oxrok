@@ -55,7 +55,40 @@ pub struct HidInfo {
     pub manufacturer: Option<String>,
     /// Serial number, when the device has one.
     pub serial: Option<String>,
+    /// The device node, where the system has one (`/dev/hidrawN` on
+    /// Linux); what libsigrok reports as the connection.
+    pub path: Option<String>,
     device: async_hid::Device,
+}
+
+/// On Linux the kernel's HID name joins manufacturer and product
+/// (`www.dcttech.com USBRelay2`); hidapi, which libsigrok uses, reports
+/// the USB device's own product string instead, read from sysfs. This
+/// returns the device node and that product string.
+#[cfg(target_os = "linux")]
+fn linux_details(id: &async_hid::DeviceId) -> (Option<String>, Option<String>) {
+    let async_hid::DeviceId::DevPath(sysfs) = id else { return (None, None) };
+    let node = sysfs.file_name().map(|n| format!("/dev/{}", n.to_string_lossy()));
+    let mut dir = sysfs.join("device");
+    let mut product = None;
+    for _ in 0..6 {
+        if let Ok(p) = std::fs::read_to_string(dir.join("product"))
+            && !p.trim().is_empty()
+        {
+            product = Some(p.trim().to_owned());
+            break;
+        }
+        match dir.parent() {
+            Some(parent) => dir = parent.to_path_buf(),
+            None => break,
+        }
+    }
+    (node, product)
+}
+
+#[cfg(not(target_os = "linux"))]
+fn linux_details(_id: &async_hid::DeviceId) -> (Option<String>, Option<String>) {
+    (None, None)
 }
 
 fn map(e: &async_hid::HidError) -> Error {
@@ -73,12 +106,14 @@ pub fn list() -> Result<Vec<HidInfo>> {
             if out.iter().any(|o| o.device.id == d.id) {
                 continue;
             }
+            let (path, product) = linux_details(&d.id);
             out.push(HidInfo {
                 vendor_id: d.vendor_id,
                 product_id: d.product_id,
-                product: d.name.clone(),
+                product: product.unwrap_or_else(|| d.name.clone()),
                 manufacturer: d.manufacturer.clone(),
                 serial: d.serial_number.clone(),
+                path,
                 device: d,
             });
         }

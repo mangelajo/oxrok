@@ -179,6 +179,19 @@ every platform. Both drivers were verified against the Pico emulator
 pins; firmware in `hil/pico-hidcable`). A real PICkit2 has not been
 tried yet.
 
+The relay board is also the first host model of the USB/IP emulator
+(`docs/USB.md`): `sudo oxrok-emu serve usbrelay --attach
+--open-devices` puts a `USBRelay2` (`-o relays=N` for another count)
+on the bus, with the serial number `ABCDE` in its report. Emulated
+status, 2026-11-02: the 11 cases of `tools/diffcli.sh --emu` (scan,
+show, get, the four switch commands, selection by serial, by path and
+by ids) give identical output and identical transactions under
+sigrok-cli and oxrok, with zero pedantic violations under either. On
+Linux `conn` is the hidraw node, as under libsigrok, and
+`conn=/dev/hidrawN`, `conn=VID.PID` and `conn=sn=SERIAL` all select a
+board. Of the emulator-verified criteria of the roadmap, the gcov
+report (9b) and a replay fixture are still open.
+
 ## Raspberry Pi Pico (sigrok-pico firmware)
 
 A Pico running the sigrok-pico firmware is a 21 channel logic analyzer

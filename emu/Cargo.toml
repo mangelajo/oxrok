@@ -1,0 +1,21 @@
+[package]
+name = "oxrok-emu"
+description = "USB/IP device server: device models attached through vhci-hcd, so drivers are checked against sigrok-cli without the hardware"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+publish = false
+
+[[bin]]
+name = "oxrok-emu"
+path = "src/main.rs"
+
+[dependencies]
+clap.workspace = true
+ctrlc = { version = "3", features = ["termination"] }
+
+[lints]
+workspace = true

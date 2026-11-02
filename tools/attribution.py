@@ -68,6 +68,8 @@ MAP = {
                                            "libsigrok/src/hardware/fx2lafw/protocol.c",
                                            "sigrok-firmware-fx2lafw (the command set)"], INDEPENDENT),
     "src/drivers/logicport/mod.rs": (["libsigrok/src/hardware/intronix-logicport/api.c"], SAME_AUTHOR),
+    "emu/src/models/usbrelay.rs": (["libsigrok/src/hardware/dcttech-usbrelay/protocol.c (the report layout)",
+                                    "libsigrok/src/hardware/dcttech-usbrelay/protocol.h"], INDEPENDENT),
     "src/drivers/logicport/protocol.rs": (["libsigrok/src/hardware/intronix-logicport/protocol.c"], SAME_AUTHOR),
     "src/drivers/logicport/readout.rs": (["libsigrok/src/hardware/intronix-logicport/protocol.c (the readout)"], SAME_AUTHOR),
     "src/drivers/logicport/firmware.rs": (["libsigrok/src/hardware/intronix-logicport/protocol.c (the ccf loader)"], SAME_AUTHOR),

@@ -108,6 +108,75 @@ The baud rate encoding follows FTDI's application note AN_120: a 3 MHz
 clock (12 MHz on the H chips above 1.2 MBaud), divisors 1 and 1.5 with
 their own codes, then 14 integer bits and a 3 bit code for the eighths.
 
+## Emulation over USB/IP
+
+On Linux a device can be a program: the `vhci-hcd` module turns a
+USB/IP server into a USB device that libusb, nusb, hidraw and the
+kernel's class drivers see as real. `oxrok-emu`, the `emu` crate of
+the workspace (`cargo build -p oxrok-emu`), is that server, written
+here rather than taken from a crate so that the models, the checks on
+what the host sends and the transaction log are all in one place. It
+is how a driver is verified against sigrok-cli without the hardware
+(`docs/ROADMAP.md`, "Emulation plan").
+
+- A device is a `DeviceModel` (`emu/src/model.rs`): its descriptors,
+  `control(setup, data)`, `out(ep, data)`, `in_transfer(ep, max)`
+  answering data, NAK or STALL, and `reset`. Plain Rust with no I/O,
+  so a model runs in a unit test, on this server and, later, on a
+  Pico. `Device` (`device.rs`) wraps it with the standard requests
+  every device answers (descriptors, configuration, status, halts) and
+  the checks on every transfer; `hid.rs` is the first transport shell:
+  the HID class descriptor, the report descriptor fetch, `GET_REPORT`,
+  `SET_REPORT`, idle and protocol. Models live in `emu/src/models`;
+  `oxrok-emu list` names them.
+- `sudo oxrok-emu serve MODEL --attach --open-devices --log FILE`
+  listens on TCP (`--listen`, port 0 picks a free one), imports the
+  device over its own loopback connection, and writes
+  `port sockfd devid speed` to `/sys/devices/platform/vhci_hcd.0/attach`,
+  as `usbip attach` would; no usbip tool is involved, but root is.
+  Once the kernel has configured the device it prints
+  `READY port=N busid=B nodes=/dev/...`; `--open-devices` makes those
+  nodes world accessible so the tools under test run as a user. On
+  standard input, each acknowledged with an `OK` line: `section NAME`
+  marks the log, `reset` puts a fresh model behind the attached device
+  (its initial state, for a second run; the kernel keeps seeing the
+  device it enumerated), `detach` ends the run, as does end of input
+  or a termination signal. The exit status is 2 when a violation was
+  logged. Without `--attach` it is a plain USB/IP server a `usbip`
+  client can import `1-1` from.
+- The transaction log is the fixture dialect above, one line per
+  completed transfer: `ctl_in 21 01 0300 0000 8 -> 4142434445000000`,
+  `ctl_out 21 09 0300 0000 ff02000000000000 -> ok`, `int_in`,
+  `bulk_out`, `-> err stall`. A transfer the model NAKs is held, as a
+  host controller holds a URB, and is not logged until it completes,
+  so a log does not depend on how often the host polls (the kernel
+  keeps one interrupt IN URB pending while a hidraw node is open, and
+  unlinks it on close). `# section NAME` lines separate the phases of
+  a run, `! violation: ...` lines record what the host did outside the
+  protocol, and with `-v` the holds, unlinks and connections appear as
+  `#` comments.
+- Pedantic checks come in two layers: `Device` flags transfers to
+  endpoints the configuration lacks or before `SET_CONFIGURATION`,
+  unknown configurations, interfaces, features and descriptors; a
+  model flags what its protocol forbids (for the relay board: report
+  lengths other than 8, report ids, unknown commands, relay numbers
+  beyond the board). A clean run under sigrok-cli validates the
+  model, a clean run under oxrok validates the port.
+- `tools/diffcli.sh --emu` starts the server, attaches each model and
+  runs its cases: besides the output, each case compares the
+  transactions the two tools caused and fails on any violation under
+  either. `EMULOG=FILE` keeps the log.
+
+What the first model taught: the kernel's HID name joins manufacturer
+and product (`www.dcttech.com USBRelay2`), while hidapi reports the
+USB device's own product string and names the connection
+`/dev/hidrawN`; oxrok's HID layer now does the same on Linux. The hub
+asks a full speed device for its device qualifier three times and
+takes the STALL; `vhci_hcd: vhci_device speed not set` in `dmesg`
+during the attach is harmless. A USB/IP server must not close its end
+while attached, so the process keeps the socket it handed to the
+kernel until it detaches.
+
 ## Troubleshooting
 
 - Linux: without a udev rule the device is root only. Packaging will

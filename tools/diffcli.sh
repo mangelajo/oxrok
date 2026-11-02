@@ -2,7 +2,7 @@
 # Differential check: runs the same command lines through sigrok-cli and
 # oxrok and diffs the output after the first header line.
 #
-#   tools/diffcli.sh [-k substring] [--hw]
+#   tools/diffcli.sh [-k substring] [--hw] [--emu]
 #
 # SIGROK_CLI and OXROK name the binaries (defaults: sigrok-cli on PATH
 # and target/debug/oxrok). --hw adds the hardware cases, which need the
@@ -10,6 +10,14 @@
 # the LogicPort cases: HIL names the bench binary that drives it
 # (default target/debug/oxrok-hil), which sets idle inputs and a 1 MHz
 # clock on CLK1 for the trigger case.
+#
+# --emu adds the emulated devices (docs/USB.md): the USB/IP server EMU
+# (default target/debug/oxrok-emu) is started under sudo, attaches each
+# model through vhci-hcd, and the cases run against it. Besides the
+# output, each case compares the transaction logs the two tools caused
+# and requires zero pedantic violations under either; EMULOG keeps the
+# log (default: a temporary file). Linux only, needs sudo and
+# `modprobe vhci-hcd`.
 
 set -u
 SIGROK_CLI=${SIGROK_CLI:-sigrok-cli}
@@ -19,10 +27,12 @@ TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
 filter=""
 hw=0
+emu=0
 while [ $# -gt 0 ]; do
     case "$1" in
         -k) filter=$2; shift ;;
         --hw) hw=1 ;;
+        --emu) emu=1 ;;
         *) echo "unknown argument $1" >&2; exit 2 ;;
     esac
     shift
@@ -58,7 +68,9 @@ case_() {
     done
     shift
     case "$name" in *"$filter"*) ;; *) return ;; esac
+    before_run a "$name"
     "$SIGROK_CLI" "$@" >"$TMP/a.out" 2>"$TMP/a.err"
+    before_run b "$name"
     "$OXROK" "$@" >"$TMP/b.out" 2>"$TMP/b.err"
     if [ "$which" = stderr ]; then
         cp "$TMP/a.err" "$TMP/a.cmp"; cp "$TMP/b.err" "$TMP/b.cmp"
@@ -83,7 +95,12 @@ case_() {
         echo "FAIL $name: $*"
         diff "$TMP/a.cmp" "$TMP/b.cmp" | head -${DIFF_LINES:-6}
     fi
+    after_case "$name"
 }
+
+# Hooks around each case; the emulator mode fills them in.
+before_run() { :; }
+after_case() { :; }
 
 # Files written by both tools, compared with a reader.
 D4="demo:logic_channels=4:analog_channels=0"
@@ -250,6 +267,84 @@ if [ $hw = 1 ]; then
     case_ "fx2lafw show" --keep-header -- -d fx2lafw --show
     case_ "fx2lafw bits 1M" -- -d fx2lafw -c samplerate=1M --samples 64 -O bits
     case_ "fx2lafw hex 24M" -- -d fx2lafw -c samplerate=24M --samples 1024 -O hex
+fi
+
+if [ $emu = 1 ]; then
+    EMU=${EMU:-$(dirname "$0")/../target/debug/oxrok-emu}
+    EMULOG=${EMULOG:-$TMP/emu.log}
+    mkfifo "$TMP/emu.ctl"
+    # The server reads commands on the FIFO and acknowledges each with
+    # an OK line; closing the FIFO detaches the device.
+    emu_wait() {
+        i=0
+        while ! grep -q "$1" "$TMP/emu.out" 2>/dev/null; do
+            i=$((i + 1))
+            if [ $i -gt 300 ]; then
+                echo "emulator: no '$1' after 15 s" >&2
+                cat "$TMP/emu.err" >&2
+                return 1
+            fi
+            sleep 0.05
+        done
+    }
+    emu_cmd() { echo "$1" >&7; emu_wait "^OK $1\$"; }
+    emu_start() {
+        : >"$TMP/emu.out"
+        sudo "$EMU" serve "$@" --listen 127.0.0.1:0 --attach --open-devices --log "$EMULOG" \
+            <"$TMP/emu.ctl" >"$TMP/emu.out" 2>"$TMP/emu.err" &
+        EMUPID=$!
+        exec 7>"$TMP/emu.ctl"
+        emu_wait '^READY'
+    }
+    emu_stop() {
+        emu_cmd detach
+        exec 7>&-
+        wait $EMUPID
+    }
+    # Each tool meets the model in its initial state.
+    before_run() { emu_cmd reset && emu_cmd "section $1 $2"; }
+    # The transactions of the two runs, comments dropped, must match,
+    # and neither run may have a violation.
+    after_case() {
+        for t in a b; do
+            sed -n "/^# section $t $1\$/,/^# section /{/^#/d;p;}" "$EMULOG" >"$TMP/$t.tx"
+        done
+        if cmp -s "$TMP/a.tx" "$TMP/b.tx"; then
+            pass=$((pass + 1))
+            echo "PASS $1 (transactions, $(wc -l <"$TMP/a.tx" | tr -d ' ') lines)"
+        else
+            fail=$((fail + 1))
+            echo "FAIL $1 (transactions)"
+            diff "$TMP/a.tx" "$TMP/b.tx" | head -${DIFF_LINES:-6}
+        fi
+        for t in a b; do
+            if grep -q '^!' "$TMP/$t.tx"; then
+                fail=$((fail + 1))
+                echo "FAIL $1 (violations under $([ $t = a ] && echo sigrok-cli || echo oxrok))"
+                grep '^!' "$TMP/$t.tx" | head -${DIFF_LINES:-6}
+            fi
+        done
+    }
+
+    if emu_start usbrelay; then
+        R="dcttech-usbrelay"
+        case_ "relay scan" --keep-header -- -d $R --scan
+        case_ "relay show" --keep-header -- -d $R --show
+        case_ "relay show R1" --keep-header -- -d $R -g R1 --show
+        case_ "relay get R1" --keep-header -- -d $R -g R1 --get enabled
+        case_ "relay set R2 on" --keep-header -- -d $R -g R2 --set -c enabled=on
+        case_ "relay set all on" --keep-header -- -d $R --set -c enabled=on
+        case_ "relay set all off" --keep-header -- -d $R --set -c enabled=off
+        case_ "relay set R1 off" --keep-header -- -d $R -g R1 --set -c enabled=off
+        case_ "relay by serial" --keep-header -- -d $R:conn=sn=ABCDE -g R2 --get enabled
+        case_ "relay by path" --keep-header -- -d $R:conn=/dev/hidraw0 -g R1 --get enabled
+        case_ "relay by ids" --keep-header -- -d $R:conn=16c0.05df -g R1 --get enabled
+        emu_stop
+    else
+        fail=$((fail + 1))
+    fi
+    before_run() { :; }
+    after_case() { :; }
 fi
 
 echo "$pass passed, $fail failed"
