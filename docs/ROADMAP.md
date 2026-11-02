@@ -109,8 +109,9 @@ right name and size, and both tools upload the same bytes.
 
 ### Driver inventory by shell
 
-libsigrok at the pinned oracle commit has 88 driver directories. By the
-shell their model needs (`demo` and the seven ported drivers included):
+libsigrok at the oracle commit has 87 driver directories; with
+`intronix-logicport`, which only oxrok has, that is 88. By the shell
+their model needs (`demo` and the seven ported drivers included):
 
 - FTDI (6): `intronix-logicport`, `chronovu-la`, `ftdi-la`,
   `asix-sigma`, `ikalogic-scanaplus`, `pipistrello-ols`.
@@ -167,7 +168,10 @@ among the supplies).
      linux-gpib ioctl backends get tested, not a stand-in. Needs the
      modules on the CI kernel (`uss720` is in Ubuntu's modules-extra;
      the staging GPIB drivers need a 6.13 kernel that builds them),
-     which is the first thing to check.
+     which is the first thing to check. Checked 2026-11-02 on Fedora 44,
+     kernel 7.2.14: `vhci-hcd` is in `kernel-modules-extra`, `uss720`
+     and `lpvo_usb_gpib` (with `agilent_82357a` and `ni_usb_gpib`) in
+     `kernel-modules`; all three load.
   2. CUSE: a userspace program that is `/dev/gpib0` or `/dev/parport0`
      and answers the ioctls (`IBRD`, `IBWRT`, `IBRSP`, `IBONL`, ...;
      `PPRDATA`, `PPWDATA`, `PPWCONTROL`, `PPRSTATUS`, `PPCLAIM`, ...).
