@@ -1,35 +1,43 @@
 //! The device models, by name.
-
-pub mod usbrelay;
+//!
+//! Each file `NAME.rs` (or directory `NAME/mod.rs`) here is one model;
+//! `build.rs` finds them and generates the module declarations, the
+//! [`NAMES`] table and the [`build`] dispatch, so adding a model touches
+//! no shared file. A model module exports:
+//!
+//! - `pub const NAME: &str`, the name `oxrok-emu serve NAME` takes,
+//!   equal to the file name (a `-` in it becomes `_` in the module
+//!   identifier);
+//! - `pub const ABOUT: &str`, one line for `oxrok-emu list`: what the
+//!   device is and the options it takes;
+//! - `pub fn build(options: &[(String, String)]) -> Result<Box<dyn DeviceModel>>`,
+//!   which parses the `-o KEY=VALUE` options and rejects unknown ones.
 
 use crate::model::DeviceModel;
 use crate::{Error, Result};
 
-/// Name and description of each model, with its options.
-pub const NAMES: &[(&str, &str)] = &[(
-    "usbrelay",
-    "dcttech USBRelay board (HID, 16c0:05df), the Pico emulator's role; relays=N (1 to 8, default 2)",
-)];
+include!(concat!(env!("OUT_DIR"), "/models.rs"));
 
-/// Builds a model from its name and `key=value` options.
-pub fn build(name: &str, options: &[(String, String)]) -> Result<Box<dyn DeviceModel>> {
-    match name {
-        "usbrelay" => {
-            let mut relays = 2;
-            for (k, v) in options {
-                match k.as_str() {
-                    "relays" => {
-                        relays = v
-                            .parse()
-                            .ok()
-                            .filter(|n| (1..=8).contains(n))
-                            .ok_or_else(|| Error(format!("relays={v}: 1 to 8")))?;
-                    }
-                    other => return Err(Error(format!("usbrelay has no option {other}"))),
-                }
-            }
-            Ok(Box::new(usbrelay::UsbRelay::new(relays)))
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn every_model_is_named_after_its_file() {
+        assert_eq!(NAMES.len(), FILES.len());
+        for ((name, about), file) in NAMES.iter().zip(FILES) {
+            assert_eq!(name, file, "a model's NAME is its file name");
+            assert!(!about.is_empty(), "{name} has no ABOUT");
         }
-        other => Err(Error(format!("no model named {other}; oxrok-emu list names them"))),
+    }
+
+    #[test]
+    fn every_model_builds_with_no_options() {
+        for (name, _) in NAMES {
+            let m = build(name, &[]).unwrap_or_else(|e| panic!("{name}: {e}"));
+            assert_eq!(m.name(), *name, "DeviceModel::name of {name}");
+        }
+        assert!(build("no-such-model", &[]).is_err());
+        assert!(build(NAMES[0].0, &[("no-such-option".into(), "1".into())]).is_err());
     }
 }

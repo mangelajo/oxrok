@@ -1,0 +1,17 @@
+gcov dcttech-usbrelay (libsigrok libsigrok-unreleased-1848-g0bc24877): executable lines reached
+  api.c        77.5%  169 of 218
+  protocol.c   80.8%  42 of 52
+  total        78.1%  211 of 270
+never reached, by function (line ranges hold no reached line):
+  api.c
+    probe_device_common: 79, 81, 90-91, 101-103, 106-107, 110-111, 124-125, 134-135
+    probe_device_conn: 223-224, 229, 231, 234, 236, 239
+    scan: 259, 291, 300, 302, 304, 312, 315, 318, 321, 327
+    dev_open: 342-343, 351
+    config_get: 382, 385-386, 394, 397-398
+    config_set: 413-414, 421-422
+    config_list: 439-440, 448-449
+  protocol.c
+    dcttech_usbrelay_update_state: 40, 42-44
+    dcttech_usbrelay_switch_cg: 102-104, 108
+    dcttech_usbrelay_query_cg: 127, 131

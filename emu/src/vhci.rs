@@ -3,6 +3,14 @@
 //! does: a free port is picked from `status`, and `port sockfd devid
 //! speed` is written to `attach`; `detach` takes the port back. Needs
 //! root, and the module (`modprobe vhci-hcd`).
+//!
+//! Once attached, [`open_device`] finds the nodes the device got (the
+//! class drivers' `/dev/hidrawN`, `/dev/ttyACMN`, `/dev/usbtmcN`, and the
+//! raw usbfs node `/dev/bus/usb/BBB/DDD` that libusb and libftdi open)
+//! and makes them world accessible after udev is done with them. A
+//! device that disconnects and comes back under new ids (EZ-USB
+//! renumeration) gets new nodes; the harness calls [`open_device`]
+//! again for its new bus id.
 
 use std::fs;
 use std::os::fd::RawFd;
@@ -29,6 +37,9 @@ pub struct PortStatus {
     pub port: u8,
     /// `004` is free (`VDEV_ST_NULL`), `006` in use.
     pub status: u16,
+    /// The `devid` the USB/IP server announced (`busnum << 16 | devnum`
+    /// on the server's side), 0 when free.
+    pub devid: u32,
     /// The bus id of the attached device, `0-0` when none.
     pub busid: String,
 }
@@ -45,6 +56,7 @@ pub fn parse_status(text: &str) -> Vec<PortStatus> {
                 hub: f[0].to_owned(),
                 port: f[1].parse().ok()?,
                 status: f[2].parse().ok()?,
+                devid: u32::from_str_radix(f[4], 16).ok()?,
                 busid: f[6].to_owned(),
             })
         })
@@ -72,7 +84,7 @@ pub fn free_port(speed: Speed) -> Result<u8> {
     };
     ports()?
         .iter()
-        .find(|p| p.hub == hub && p.status == 4)
+        .find(|p| p.hub == hub && p.status == PORT_FREE)
         .map(|p| p.port)
         .ok_or_else(|| Error(format!("no free {hub} port on {SYSFS}")))
 }
@@ -89,6 +101,18 @@ pub fn attach(port: u8, sockfd: RawFd, devid: u32, speed: Speed) -> Result<()> {
 pub fn detach(port: u8) -> Result<()> {
     fs::write(Path::new(SYSFS).join("detach"), format!("{port}"))
         .map_err(|e| Error(format!("detach port {port}: {e}")))
+}
+
+/// The status code of a free port.
+pub const PORT_FREE: u16 = 4;
+
+/// The ports in use whose device announced `devid`; with `None`, every
+/// port in use.
+pub fn attached_ports(devid: Option<u32>) -> Result<Vec<PortStatus>> {
+    Ok(ports()?
+        .into_iter()
+        .filter(|p| p.status != PORT_FREE && devid.is_none_or(|d| p.devid == d))
+        .collect())
 }
 
 /// The bus id the kernel gives the device on `port`; it appears in
@@ -181,6 +205,110 @@ pub fn open_nodes(nodes: &[PathBuf]) -> Result<()> {
     Ok(())
 }
 
+/// The usbfs node of the device in sysfs directory `dir`,
+/// `/dev/bus/usb/BBB/DDD` from its `busnum` and `devnum`, and the
+/// `bus.address` pair `conn=` takes for it.
+pub fn usbfs_node(dir: &Path) -> Option<(PathBuf, String)> {
+    let read =
+        |f: &str| -> Option<u16> { fs::read_to_string(dir.join(f)).ok()?.trim().parse().ok() };
+    let (bus, dev) = (read("busnum")?, read("devnum")?);
+    Some((PathBuf::from(format!("/dev/bus/usb/{bus:03}/{dev:03}")), format!("{bus}.{dev}")))
+}
+
+/// Waits for udev to finish the events queued so far (up to `timeout`),
+/// so that the permissions it applies to new nodes are not applied
+/// after ours. Without `udevadm`, nothing to wait for.
+pub fn udev_settle(timeout: Duration) {
+    let _ = std::process::Command::new("udevadm")
+        .arg("settle")
+        .arg(format!("--timeout={}", timeout.as_secs().max(1)))
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status();
+}
+
+/// Whether some interface of the device in `dir` is of a class whose
+/// kernel driver creates a node (HID, CDC, USBTMC), so that waiting for
+/// one is worth it.
+fn expects_class_node(dir: &Path) -> bool {
+    let Ok(entries) = fs::read_dir(dir) else { return false };
+    entries.flatten().any(|e| {
+        let read = |f: &str| fs::read_to_string(e.path().join(f)).unwrap_or_default();
+        match read("bInterfaceClass").trim() {
+            "03" | "02" | "0a" => true,
+            "fe" => read("bInterfaceSubClass").trim() == "03",
+            _ => false,
+        }
+    })
+}
+
+/// The nodes of an attached device.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct DeviceNodes {
+    /// `/dev/bus/usb/BBB/DDD`, when the device has one.
+    pub usbfs: Option<PathBuf>,
+    /// `bus.address`, as `conn=` takes it for libusb drivers.
+    pub bus_address: Option<String>,
+    /// The class drivers' nodes, sorted.
+    pub nodes: Vec<PathBuf>,
+}
+
+impl DeviceNodes {
+    /// All of them, usbfs first.
+    pub fn all(&self) -> Vec<PathBuf> {
+        self.usbfs.iter().cloned().chain(self.nodes.iter().cloned()).collect()
+    }
+}
+
+/// Finds the nodes of the configured device in sysfs directory `dir`
+/// and, with `open`, makes them readable and writable by everyone.
+///
+/// udev applies its own modes and ACLs to new nodes some time after the
+/// kernel creates them; the queue is settled first, the modes set, and
+/// checked again after a second settle (a late event resets them), up
+/// to three rounds. A class node is waited for up to `timeout` when an
+/// interface's class has one. Called once after the attach, and again
+/// after the device reappears under a new address.
+///
+/// # Errors
+///
+/// When a node cannot be changed, or keeps losing its mode.
+pub fn open_device(dir: &Path, open: bool, timeout: Duration) -> Result<DeviceNodes> {
+    use std::os::unix::fs::PermissionsExt;
+    udev_settle(timeout);
+    let wait = if expects_class_node(dir) { timeout } else { Duration::ZERO };
+    let nodes = device_nodes(dir, wait);
+    let (usbfs, bus_address) = match usbfs_node(dir) {
+        Some((path, pair)) if path.exists() => (Some(path), Some(pair)),
+        Some((_, pair)) => (None, Some(pair)),
+        None => (None, None),
+    };
+    let found = DeviceNodes { usbfs, bus_address, nodes };
+    if !open {
+        return Ok(found);
+    }
+    let all = found.all();
+    for round in 0..3 {
+        open_nodes(&all)?;
+        udev_settle(timeout);
+        let lost: Vec<&PathBuf> = all
+            .iter()
+            .filter(|n| fs::metadata(n).is_ok_and(|m| m.permissions().mode() & 0o666 != 0o666))
+            .collect();
+        if lost.is_empty() {
+            return Ok(found);
+        }
+        if round == 2 {
+            return Err(Error(format!(
+                "{} lost mode 0666 again after udev settled",
+                lost[0].display()
+            )));
+        }
+    }
+    Ok(found)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -193,8 +321,18 @@ mod tests {
                     ss  0008 004 000 00000000 000000 0-0\n";
         let p = parse_status(text);
         assert_eq!(p.len(), 3);
-        assert_eq!(p[0], PortStatus { hub: "hs".into(), port: 0, status: 6, busid: "1-1".into() });
-        assert_eq!(p[1].status, 4);
+        assert_eq!(
+            p[0],
+            PortStatus {
+                hub: "hs".into(),
+                port: 0,
+                status: 6,
+                devid: 0x0001_0002,
+                busid: "1-1".into()
+            }
+        );
+        assert_eq!(p[1].status, PORT_FREE);
+        assert_eq!(p[1].devid, 0);
         assert_eq!(p[2].hub, "ss");
     }
 }

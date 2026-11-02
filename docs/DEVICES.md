@@ -14,11 +14,24 @@ Firmware: the vendor's `LogicPort.ccf`, unmodified, installed as
 `intronix-logicport.ccf` in one of the firmware directories (first hit
 wins):
 
-- `$OXROK_FIRMWARE_DIR`, `$SIGROK_FIRMWARE_DIR` (colon separated lists)
-- `~/.local/share/oxrok-firmware`, `~/.local/share/sigrok-firmware`
-- `/usr/local/share/oxrok-firmware`, `/usr/local/share/sigrok-firmware`,
-  `/opt/homebrew/share/sigrok-firmware`, `/usr/share/oxrok-firmware`,
-  `/usr/share/sigrok-firmware`
+- `$OXROK_FIRMWARE_DIR` (a colon separated list), `$SIGROK_FIRMWARE_DIR`
+  (one directory, as libsigrok takes it), `$SIGROK_FIRMWARE_PATH` (a
+  colon separated list)
+- `oxrok-firmware`, then `sigrok-firmware`, in the user's data directory
+  (`$XDG_DATA_HOME`, else `~/.local/share`)
+- the same two in each system data directory (`$XDG_DATA_DIRS`, else
+  `/usr/local/share`, `/opt/homebrew/share` and `/usr/share`)
+
+This follows libsigrok's order (`resource.c`) with oxrok's names first
+at each step, so a variable set for sigrok-cli reaches oxrok too. Three
+differences remain. libsigrok also searches its compile-time
+`FIRMWARE_DIR` (`$prefix/share/sigrok-firmware`) between the user's
+directory and the system's; oxrok has no install prefix, so a sigrok
+installed under another prefix needs `SIGROK_FIRMWARE_PATH`. oxrok's
+default system list adds `/opt/homebrew/share`, where Homebrew puts
+`sigrok-firmware`. And a `SIGROK_FIRMWARE_DIR` that is set but empty
+is skipped by oxrok, where libsigrok keeps it as a lookup relative to
+the current directory.
 
 `sigrok-fwextract-intronix-logicport` from sigrok-util gets the file
 from the vendor's Windows installer. Per image `.rbf` files written by
@@ -189,8 +202,19 @@ by ids) give identical output and identical transactions under
 sigrok-cli and oxrok, with zero pedantic violations under either. On
 Linux `conn` is the hidraw node, as under libsigrok, and
 `conn=/dev/hidrawN`, `conn=VID.PID` and `conn=sn=SERIAL` all select a
-board. Of the emulator-verified criteria of the roadmap, the gcov
-report (9b) and a replay fixture are still open.
+board. The cases are `tools/emu/usbrelay.sh`, their goldens
+`tests/emu/usbrelay`. The gcov report of the C driver over those cases
+(`tests/emu/usbrelay/gcov.txt`, 2026-11-02) is 78.1% of the executable
+lines (211 of 270; `api.c` 77.5%, `protocol.c` 80.8%). Not reached, and
+not emulated on purpose: the error returns when hidapi cannot open,
+read or write the device or reports a short or failed transfer, HID
+devices whose strings are missing or name another vendor or product
+(the emulator is the only one on the bus), a non-printable serial
+number, a `conn=sn=` that matches no board, the
+`SR_ERR_NA` defaults of `config_get`, `config_set` and `config_list`
+for keys sigrok-cli never asks, `dev_open` on a device already open,
+and the hex dumps at log level 5. Of the emulator-verified criteria of
+the roadmap, a replay fixture is still open.
 
 ## Raspberry Pi Pico (sigrok-pico firmware)
 

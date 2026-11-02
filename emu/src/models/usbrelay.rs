@@ -39,8 +39,37 @@
 //! report, not from USB.
 
 use crate::descriptor::{self, DeviceDescriptor};
-use crate::hid::{self, HidInterface, HidReports};
 use crate::model::{Descriptors, DeviceModel, Reply, Setup, Speed, Violations};
+use crate::shells::hid::{self, HidInterface, HidReports};
+use crate::{Error, Result};
+
+/// The model name.
+pub const NAME: &str = "usbrelay";
+/// What `oxrok-emu list` says about it.
+pub const ABOUT: &str =
+    "dcttech USBRelay board (HID, 16c0:05df), the Pico emulator's role; relays=N (1 to 8, default 2)";
+
+/// A board from the `-o` options: `relays=N`, 1 to 8, default 2.
+///
+/// # Errors
+///
+/// On an unknown option or a relay count out of range.
+pub fn build(options: &[(String, String)]) -> Result<Box<dyn DeviceModel>> {
+    let mut relays = 2;
+    for (k, v) in options {
+        match k.as_str() {
+            "relays" => {
+                relays = v
+                    .parse()
+                    .ok()
+                    .filter(|n| (1..=8).contains(n))
+                    .ok_or_else(|| Error(format!("relays={v}: 1 to 8")))?;
+            }
+            other => return Err(Error(format!("{NAME} has no option {other}"))),
+        }
+    }
+    Ok(Box::new(UsbRelay::new(relays)))
+}
 
 /// The USB vendor id (shared by many V-USB projects).
 pub const VENDOR_ID: u16 = 0x16c0;
@@ -214,7 +243,7 @@ impl UsbRelay {
 
 impl DeviceModel for UsbRelay {
     fn name(&self) -> &'static str {
-        "usbrelay"
+        NAME
     }
 
     fn descriptors(&self) -> &Descriptors {

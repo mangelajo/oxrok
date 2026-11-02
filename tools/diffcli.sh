@@ -2,22 +2,35 @@
 # Differential check: runs the same command lines through sigrok-cli and
 # oxrok and diffs the output after the first header line.
 #
-#   tools/diffcli.sh [-k substring] [--hw] [--emu]
+#   tools/diffcli.sh [-k substring] [--hw] [--emu] [--emu-model NAME[,NAME]]... [--gcov]
 #
 # SIGROK_CLI and OXROK name the binaries (defaults: sigrok-cli on PATH
-# and target/debug/oxrok). --hw adds the hardware cases, which need the
+# and target/debug/oxrok). -k runs only the cases whose name contains
+# the substring. --hw adds the hardware cases, which need the
 # LogicPort and the fx2lafw device attached, and the ESP32 generator for
 # the LogicPort cases: HIL names the bench binary that drives it
 # (default target/debug/oxrok-hil), which sets idle inputs and a 1 MHz
 # clock on CLK1 for the trigger case.
 #
-# --emu adds the emulated devices (docs/USB.md): the USB/IP server EMU
-# (default target/debug/oxrok-emu) is started under sudo, attaches each
-# model through vhci-hcd, and the cases run against it. Besides the
-# output, each case compares the transaction logs the two tools caused
-# and requires zero pedantic violations under either; EMULOG keeps the
-# log (default: a temporary file). Linux only, needs sudo and
-# `modprobe vhci-hcd`.
+# --emu adds the emulated devices (docs/USB.md, "Emulation over USB/IP"):
+# for each scenario file tools/emu/MODEL.sh the USB/IP server EMU
+# (default target/debug/oxrok-emu) is started under sudo, attaches the
+# model through vhci-hcd, and the file's emu_case lines run against it.
+# A case is full when oxrok has the case's driver (both tools, outputs
+# and transactions compared) and oracle-only when it does not
+# (sigrok-cli alone, checked against the goldens in tests/emu/MODEL);
+# a driver the scenario lists in EMU_FULL must be oxrok's. Either way
+# no pedantic violation may be logged, every tool must print something
+# (unless --no-output), and existing goldens are compared. EMU_BLESS=1 writes the goldens instead. --emu-model
+# runs only the named models (and no other cases); --gcov
+# zeroes the coverage counters of the model's libsigrok driver before
+# its session and writes tests/emu/MODEL/gcov.txt after it. Sessions
+# hold an exclusive lock on EMU_LOCK (default /tmp/oxrok-emu.lock), so
+# concurrent runs on one machine take turns; EMULOG=DIR keeps the
+# transaction logs as DIR/MODEL.log (default: a temporary directory).
+# Firmware stand-ins (tools/emu-firmware.sh) go to EMU_FIRMWARE_DIR,
+# exported to both tools as SIGROK_FIRMWARE_DIR. Linux only, needs
+# passwordless sudo and `modprobe vhci-hcd`.
 
 set -u
 SIGROK_CLI=${SIGROK_CLI:-sigrok-cli}
@@ -25,18 +38,42 @@ OXROK=${OXROK:-$(dirname "$0")/../target/debug/oxrok}
 HIL=${HIL:-$(dirname "$0")/../target/debug/oxrok-hil}
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
+# An interrupt stops the run: the emulator (when one runs) is detached
+# and the lock released by the exit, rather than every remaining case
+# failing against a server the signal took down.
+EMUPID=""
+TOOLPID=""
+on_signal() {
+    trap - INT TERM HUP
+    echo "interrupted by SIG$1" >&2
+    # timeout runs the tool in a process group of its own, which a
+    # Ctrl-C does not reach; it passes a TERM on.
+    if [ -n "$TOOLPID" ]; then kill -TERM "$TOOLPID" 2>/dev/null; wait "$TOOLPID" 2>/dev/null; fi
+    if [ -n "$EMUPID" ]; then emu_stop >/dev/null 2>&1; fi
+    exit 130
+}
+trap 'on_signal INT' INT
+trap 'on_signal TERM' TERM
+trap 'on_signal HUP' HUP
 filter=""
 hw=0
 emu=0
+emu_models=""
+gcov=0
 while [ $# -gt 0 ]; do
     case "$1" in
         -k) filter=$2; shift ;;
         --hw) hw=1 ;;
         --emu) emu=1 ;;
+        --emu-model) emu=1; emu_models="$emu_models $(echo "$2" | tr ',' ' ')"; shift ;;
+        --gcov) emu=1; gcov=1 ;;
         *) echo "unknown argument $1" >&2; exit 2 ;;
     esac
     shift
 done
+# --emu-model runs that model's cases alone.
+software=1
+[ -n "$emu_models" ] && software=0
 pass=0
 fail=0
 
@@ -48,6 +85,29 @@ fail=0
 strip_header() {
     grep -v -E '^(META |FRAME-)' | sed -E '1{/^(libsigrok|sigrok-cli|oxrok) /d;}' \
         | sed -E 's/^\$(date|version) .*/$\1 X $end/; s/^\$scope module (libsigrok|oxrok) /$scope module X /'
+}
+
+# Turns tool T's output into $TMP/T.cmp, as the case's flags say:
+# the stream (which), the header (strip), the --filter script, --names.
+to_cmp() {
+    if [ "$which" = stderr ]; then
+        cp "$TMP/$1.err" "$TMP/$1.cmp"
+    elif [ $strip = 1 ]; then
+        strip_header <"$TMP/$1.out" >"$TMP/$1.cmp"
+    else
+        cp "$TMP/$1.out" "$TMP/$1.cmp"
+    fi
+    if [ -n "$filter_expr" ]; then
+        sed -E "$filter_expr" "$TMP/$1.cmp" >"$TMP/$1.f"; mv "$TMP/$1.f" "$TMP/$1.cmp"
+    fi
+    if [ $names = 1 ]; then
+        if [ "$1" = a ]; then
+            sed -E 's/^([^:]*):.*/\1/' "$TMP/a.cmp" | grep -v -E '^  (gnuplot|scale)$' >"$TMP/a.n"
+        else
+            sed -E 's/^([^:]*):.*/\1/' "$TMP/b.cmp" >"$TMP/b.n"
+        fi
+        mv "$TMP/$1.n" "$TMP/$1.cmp"
+    fi
 }
 
 # case NAME [--keep-header] [--stderr] [--names] [--filter SED] -- ARGS...
@@ -67,26 +127,11 @@ case_() {
         shift
     done
     shift
+    [ $software = 1 ] || return
     case "$name" in *"$filter"*) ;; *) return ;; esac
-    before_run a "$name"
     "$SIGROK_CLI" "$@" >"$TMP/a.out" 2>"$TMP/a.err"
-    before_run b "$name"
     "$OXROK" "$@" >"$TMP/b.out" 2>"$TMP/b.err"
-    if [ "$which" = stderr ]; then
-        cp "$TMP/a.err" "$TMP/a.cmp"; cp "$TMP/b.err" "$TMP/b.cmp"
-    elif [ $strip = 1 ]; then
-        strip_header <"$TMP/a.out" >"$TMP/a.cmp"; strip_header <"$TMP/b.out" >"$TMP/b.cmp"
-    else
-        cp "$TMP/a.out" "$TMP/a.cmp"; cp "$TMP/b.out" "$TMP/b.cmp"
-    fi
-    if [ -n "$filter_expr" ]; then
-        sed -E "$filter_expr" "$TMP/a.cmp" >"$TMP/a.f"; mv "$TMP/a.f" "$TMP/a.cmp"
-        sed -E "$filter_expr" "$TMP/b.cmp" >"$TMP/b.f"; mv "$TMP/b.f" "$TMP/b.cmp"
-    fi
-    if [ $names = 1 ]; then
-        sed -E 's/^([^:]*):.*/\1/' "$TMP/a.cmp" | grep -v -E '^  (gnuplot|scale)$' >"$TMP/a.n"; mv "$TMP/a.n" "$TMP/a.cmp"
-        sed -E 's/^([^:]*):.*/\1/' "$TMP/b.cmp" >"$TMP/b.n"; mv "$TMP/b.n" "$TMP/b.cmp"
-    fi
+    to_cmp a; to_cmp b
     if cmp -s "$TMP/a.cmp" "$TMP/b.cmp"; then
         pass=$((pass + 1))
         echo "PASS $name"
@@ -95,12 +140,7 @@ case_() {
         echo "FAIL $name: $*"
         diff "$TMP/a.cmp" "$TMP/b.cmp" | head -${DIFF_LINES:-6}
     fi
-    after_case "$name"
 }
-
-# Hooks around each case; the emulator mode fills them in.
-before_run() { :; }
-after_case() { :; }
 
 # Files written by both tools, compared with a reader.
 D4="demo:logic_channels=4:analog_channels=0"
@@ -270,81 +310,404 @@ if [ $hw = 1 ]; then
 fi
 
 if [ $emu = 1 ]; then
-    EMU=${EMU:-$(dirname "$0")/../target/debug/oxrok-emu}
-    EMULOG=${EMULOG:-$TMP/emu.log}
-    mkfifo "$TMP/emu.ctl"
-    # The server reads commands on the FIFO and acknowledges each with
-    # an OK line; closing the FIFO detaches the device.
-    emu_wait() {
+    TOOLS=$(dirname "$0")
+    EMU=${EMU:-$TOOLS/../target/debug/oxrok-emu}
+    EMU_LOCK=${EMU_LOCK:-/tmp/oxrok-emu.lock}
+    EMU_LOCK_WAIT=${EMU_LOCK_WAIT:-1800}
+    EMU_GOLDEN=${EMU_GOLDEN:-$(cd "$TOOLS/.." && pwd)/tests/emu}
+    EMU_BLESS=${EMU_BLESS:-0}
+    EMU_CASE_TIMEOUT=${EMU_CASE_TIMEOUT:-60}
+    EMULOG=${EMULOG:-$TMP}
+    mkdir -p "$EMULOG"
+    emu_fail() { fail=$((fail + 1)); echo "FAIL $*"; }
+    # The drivers oxrok has: a case of one of them runs under both tools.
+    # An oxrok that cannot list them would turn every case into an
+    # oracle case, so that fails the run.
+    if ! "$OXROK" -L >"$TMP/drivers" 2>"$TMP/drivers.err"; then
+        emu_fail "$OXROK -L: $(head -1 "$TMP/drivers.err")"
+    fi
+    OXROK_DRIVERS=" $(sed -n '/^Supported hardware drivers:/,/^$/s/^  \([^ ]*\) .*/\1/p' "$TMP/drivers" | tr '\n' ' ') "
+    [ "$OXROK_DRIVERS" != "  " ] || emu_fail "$OXROK -L lists no hardware driver; every case would be oracle-only"
+    EMU_FIRMWARE_DIR=${EMU_FIRMWARE_DIR:-$HOME/work/sigrok/firmware-standin}
+    # oxrok searches its own variable first; the stand-ins must be what
+    # both tools upload.
+    unset OXROK_FIRMWARE_DIR
+    if sh "$TOOLS/emu-firmware.sh" "$EMU_FIRMWARE_DIR" >"$TMP/fw.out" 2>&1; then
+        export SIGROK_FIRMWARE_DIR="$EMU_FIRMWARE_DIR"
+    else
+        emu_fail "firmware stand-ins"; cat "$TMP/fw.out"
+    fi
+
+    # The state letter of a process (/proc/PID/stat), empty when gone.
+    emu_pstate() {
+        st=""
+        [ -r "/proc/$1/stat" ] && read -r _ _ st _ <"/proc/$1/stat" 2>/dev/null
+        echo "$st"
+    }
+    # The sudo process in front of the emulator and the emulator itself.
+    emu_pids() {
+        [ -n "${EMUPID:-}" ] || return 0
+        echo "$EMUPID"; pgrep -P "$EMUPID" 2>/dev/null || true
+    }
+    # Whether the emulator still runs; a zombie does not count.
+    emu_alive() {
+        [ -n "${EMUPID:-}" ] || return 1
+        st=$(emu_pstate "$EMUPID")
+        [ -n "$st" ] && [ "$st" != Z ]
+    }
+    # Whether it, or sudo, is stopped (SIGSTOP, a debugger): it cannot
+    # answer until someone continues it.
+    emu_stopped() {
+        for p in $(emu_pids); do
+            case $(emu_pstate "$p") in T | t) return 0 ;; esac
+        done
+        return 1
+    }
+    # Sends signal $1 to sudo and the emulator, a stopped one continued.
+    emu_signal() {
+        pids=$(emu_pids | tr '\n' ' ')
+        [ -n "$pids" ] || return 0
+        sudo -n kill -"$1" $pids 2>/dev/null
+        [ "$1" = KILL ] || sudo -n kill -CONT $pids 2>/dev/null
+        return 0
+    }
+    # emu_gone TICKS: waits up to TICKS times 50 ms for the emulator to end.
+    emu_gone() {
         i=0
-        while ! grep -q "$1" "$TMP/emu.out" 2>/dev/null; do
+        while emu_alive && [ $i -lt "$1" ]; do sleep 0.05; i=$((i + 1)); done
+        ! emu_alive
+    }
+    # emu_wait SKIP GREP-ARGS...: waits until a line after the first
+    # SKIP lines of the server's output matches; fails when the server
+    # exits, is stopped, or after 15 s. A server that is stopped or did
+    # not answer counts as dead from then on (EMU_DEAD), so the cases
+    # after it fail at once instead of waiting 15 s each.
+    emu_wait() {
+        skip=$1; shift
+        i=0
+        while :; do
+            if tail -n +$((skip + 1)) "$TMP/emu.out" 2>/dev/null | grep -q "$@"; then return 0; fi
+            if ! emu_alive; then
+                # It may have answered just before exiting.
+                tail -n +$((skip + 1)) "$TMP/emu.out" 2>/dev/null | grep -q "$@" && return 0
+                echo "emulator exited:" >&2; sed 's/^/  /' "$TMP/emu.err" >&2
+                return 1
+            fi
+            if emu_stopped; then
+                EMU_DEAD=1
+                echo "emulator: stopped (process state T); not waiting for it" >&2
+                return 1
+            fi
             i=$((i + 1))
             if [ $i -gt 300 ]; then
-                echo "emulator: no '$1' after 15 s" >&2
-                cat "$TMP/emu.err" >&2
+                EMU_DEAD=1
+                echo "emulator: no answer after 15 s" >&2; sed 's/^/  /' "$TMP/emu.err" >&2
                 return 1
             fi
             sleep 0.05
         done
     }
-    emu_cmd() { echo "$1" >&7; emu_wait "^OK $1\$"; }
+    # Sends a command and waits for its own acknowledgement.
+    emu_cmd() {
+        emu_alive || { echo "emulator: not running for '$1'" >&2; return 1; }
+        [ "$EMU_DEAD" = 0 ] || { echo "emulator: not answering, so no '$1'" >&2; return 1; }
+        lines=$(wc -l <"$TMP/emu.out")
+        printf '%s\n' "$1" >&7 || return 1
+        emu_wait "$lines" -F -x "OK $1"
+    }
     emu_start() {
-        : >"$TMP/emu.out"
-        sudo "$EMU" serve "$@" --listen 127.0.0.1:0 --attach --open-devices --log "$EMULOG" \
-            <"$TMP/emu.ctl" >"$TMP/emu.out" 2>"$TMP/emu.err" &
+        : >"$TMP/emu.out"; : >"$TMP/emu.err"
+        EMU_DEAD=0
+        rm -f "$TMP/emu.ctl"; mkfifo "$TMP/emu.ctl"
+        sudo -n "$EMU" serve "$EMU_MODEL" $EMU_OPTIONS --listen 127.0.0.1:0 --attach \
+            --open-devices --log "$EMULOG/$EMU_MODEL.log" \
+            <"$TMP/emu.ctl" >"$TMP/emu.out" 2>"$TMP/emu.err" 7>&- 8<&- &
         EMUPID=$!
-        exec 7>"$TMP/emu.ctl"
-        emu_wait '^READY'
-    }
-    emu_stop() {
-        emu_cmd detach
-        exec 7>&-
-        wait $EMUPID
-    }
-    # Each tool meets the model in its initial state.
-    before_run() { emu_cmd reset && emu_cmd "section $1 $2"; }
-    # The transactions of the two runs, comments dropped, must match,
-    # and neither run may have a violation.
-    after_case() {
-        for t in a b; do
-            sed -n "/^# section $t $1\$/,/^# section /{/^#/d;p;}" "$EMULOG" >"$TMP/$t.tx"
+        # Read-write, so neither end blocks opening it; closing it is
+        # the end of input that detaches the device.
+        exec 7<>"$TMP/emu.ctl"
+        emu_wait 0 '^READY ' || return 1
+        EMU_PORT=""; EMU_BUSID=""; EMU_USB=""; EMU_USBFS=""; EMU_NODES=""
+        for kv in $(grep -m1 '^READY ' "$TMP/emu.out"); do
+            case "$kv" in
+                port=*) EMU_PORT=${kv#port=} ;;
+                busid=*) EMU_BUSID=${kv#busid=} ;;
+                usb=*) EMU_USB=${kv#usb=} ;;
+                usbfs=*) EMU_USBFS=${kv#usbfs=} ;;
+                nodes=*) EMU_NODES=${kv#nodes=} ;;
+            esac
         done
-        if cmp -s "$TMP/a.tx" "$TMP/b.tx"; then
-            pass=$((pass + 1))
-            echo "PASS $1 (transactions, $(wc -l <"$TMP/a.tx" | tr -d ' ') lines)"
-        else
-            fail=$((fail + 1))
-            echo "FAIL $1 (transactions)"
-            diff "$TMP/a.tx" "$TMP/b.tx" | head -${DIFF_LINES:-6}
+        first_node() { echo "$EMU_NODES" | tr ',' '\n' | grep -m1 "^$1" || true; }
+        EMU_HIDRAW=$(first_node /dev/hidraw)
+        EMU_TTY=$(first_node /dev/tty)
+        EMU_USBTMC=$(first_node /dev/usbtmc)
+        export EMU_PORT EMU_BUSID EMU_USB EMU_USBFS EMU_NODES EMU_HIDRAW EMU_TTY EMU_USBTMC
+        # The node numbers and the device address change from one attach
+        # to the next; the outputs name them generically.
+        : >"$TMP/emu.sed"
+        for n in $(echo "$EMU_NODES" | tr ',' ' ') $EMU_USBFS; do
+            gen=$(echo "$n" | sed -E 's#^/dev/bus/usb/[0-9]+/[0-9]+$#/dev/bus/usb/BBB/DDD#; s#[0-9]+$#N#')
+            printf 's#%s([^0-9]|$)#%s\\1#g\n' "$(echo "$n" | sed 's/[.]/\\./g')" "$gen" >>"$TMP/emu.sed"
+        done
+        if [ -n "$EMU_USB" ]; then
+            printf 's#conn=%s([^0-9]|$)#conn=BUS.ADDR\\1#g\n' "$(echo "$EMU_USB" | sed 's/[.]/\\./g')" >>"$TMP/emu.sed"
         fi
-        for t in a b; do
-            if grep -q '^!' "$TMP/$t.tx"; then
-                fail=$((fail + 1))
-                echo "FAIL $1 (violations under $([ $t = a ] && echo sigrok-cli || echo oxrok))"
-                grep '^!' "$TMP/$t.tx" | head -${DIFF_LINES:-6}
+    }
+    # Detaches and ends the emulator, whatever state it is in: a
+    # server that does not end after the detach is terminated, then
+    # killed (a stopped one too, which a TERM alone would leave
+    # waiting), so the session never waits on it for ever. The detach
+    # traffic gets a section of its own.
+    emu_stop() {
+        if [ "${EMU_DEAD:-0}" = 0 ]; then
+            emu_cmd "section detach" >/dev/null 2>&1 && emu_cmd detach >/dev/null 2>&1
+        fi
+        exec 7>&-
+        if [ "$EMU_DEAD" = 1 ] && emu_alive; then
+            echo "emulator: not answering; terminating it" >&2
+        fi
+        if [ "$EMU_DEAD" = 1 ] || ! emu_gone 200; then
+            [ "$EMU_DEAD" = 1 ] || echo "emulator: still running 10 s after detach; terminating it" >&2
+            emu_signal TERM
+            if ! emu_gone 60; then
+                echo "emulator: still running 3 s after SIGTERM; killing it" >&2
+                emu_signal KILL
+                emu_gone 60
             fi
-        done
+        fi
+        if emu_alive; then
+            echo "emulator: pid $EMUPID survived SIGKILL; leaving it" >&2
+            emu_status=1
+        else
+            wait "$EMUPID" 2>/dev/null
+            emu_status=$?
+        fi
+        [ "$EMU_DEAD" = 0 ] || [ $emu_status != 0 ] || emu_status=1
+        EMUPID=""
+        sudo -n "$EMU" cleanup >&2
+        return $emu_status
+    }
+    # The transaction lines of a section of the log, comments dropped.
+    # The name goes through the environment: awk -v would turn its
+    # backslashes into escapes.
+    emu_tx() {
+        EMU_SECTION="# section $1" awk '$0 == ENVIRON["EMU_SECTION"] { on = 1; next }
+            /^# section / { on = 0 } on && !/^#/' "$EMULOG/$EMU_MODEL.log"
+    }
+    emu_slug() {
+        echo "$1" | tr 'A-Z' 'a-z' | sed -E 's/[^a-z0-9]+/-/g; s/^-//; s/-$//'
     }
 
-    if emu_start usbrelay; then
-        R="dcttech-usbrelay"
-        case_ "relay scan" --keep-header -- -d $R --scan
-        case_ "relay show" --keep-header -- -d $R --show
-        case_ "relay show R1" --keep-header -- -d $R -g R1 --show
-        case_ "relay get R1" --keep-header -- -d $R -g R1 --get enabled
-        case_ "relay set R2 on" --keep-header -- -d $R -g R2 --set -c enabled=on
-        case_ "relay set all on" --keep-header -- -d $R --set -c enabled=on
-        case_ "relay set all off" --keep-header -- -d $R --set -c enabled=off
-        case_ "relay set R1 off" --keep-header -- -d $R -g R1 --set -c enabled=off
-        case_ "relay by serial" --keep-header -- -d $R:conn=sn=ABCDE -g R2 --get enabled
-        case_ "relay by path" --keep-header -- -d $R:conn=/dev/hidraw0 -g R1 --get enabled
-        case_ "relay by ids" --keep-header -- -d $R:conn=16c0.05df -g R1 --get enabled
-        emu_stop
-    else
-        fail=$((fail + 1))
-    fi
-    before_run() { :; }
-    after_case() { :; }
+    # emu_case NAME [--keep-header] [--stderr] [--names] [--filter SED]
+    #          [--expect-fail] [--no-output] [--driver ID] -- ARGS...
+    #   The flags of case_, plus: --expect-fail, the tools must exit
+    #   with a failure; --no-output, the compared output must be empty
+    #   (a --set prints nothing) rather than not empty; --driver, the
+    #   driver the case uses when the model has several in EMU_DRIVER
+    #   (default: the first). The name neither starts nor ends with
+    #   white space and holds no tab or newline: the emulator trims the
+    #   command line it acknowledges and logs as the section name.
+    emu_case() {
+        name=$1; shift
+        strip=1; which=stdout; names=0; filter_expr=""; expect=0; no_output=0
+        driver=${EMU_DRIVER%% *}
+        while [ $# -gt 0 ] && [ "$1" != "--" ]; do
+            case "$1" in
+                --keep-header) strip=0 ;;
+                --stderr) which=stderr ;;
+                --names) names=1 ;;
+                --filter) filter_expr=$2; shift ;;
+                --expect-fail) expect=1 ;;
+                --no-output) no_output=1 ;;
+                --driver) driver=$2; shift ;;
+                *) emu_fail "$name: emu_case has no flag $1"; return ;;
+            esac
+            shift
+        done
+        [ $# -gt 0 ] && shift
+        case "$name" in
+            "" | [[:space:]]* | *[[:space:]] | *"$(printf '\t')"* | *"
+"*)
+                emu_fail "'$name': a case name is not empty, holds no tab or newline, and neither starts nor ends with white space"
+                return ;;
+        esac
+        case "$name" in *"$filter"*) ;; *) return ;; esac
+        slug=$(emu_slug "$name")
+        case " $emu_slugs " in
+            *" $slug "*) emu_fail "$name: another case of $EMU_MODEL has the file name $slug"; return ;;
+        esac
+        emu_slugs="$emu_slugs $slug"
+        case "$OXROK_DRIVERS" in *" $driver "*) mode=full; tools="a b" ;; *) mode=oracle; tools=a ;; esac
+        why=""
+        # A driver the scenario says oxrok has must not quietly fall
+        # back to an oracle case.
+        if [ $mode = oracle ]; then
+            case " $EMU_FULL " in *" $driver "*) why="; oxrok -L lacks $driver, which EMU_FULL lists" ;; esac
+        fi
+        for t in $tools; do
+            if [ $t = a ]; then tool=$SIGROK_CLI; else tool=$OXROK; fi
+            if ! { emu_cmd reset && emu_cmd "section $t $name"; } >/dev/null; then
+                emu_fail "$name: the emulator did not answer"; return
+            fi
+            # A tool that hangs on the model must not hold the lock for
+            # ever; 124 is timeout's status. It runs in the background so
+            # that a signal's trap runs at once, not when the tool ends.
+            timeout -k 5 "$EMU_CASE_TIMEOUT" "$tool" "$@" >"$TMP/$t.out" 2>"$TMP/$t.err" 7>&- 8<&- &
+            TOOLPID=$!
+            wait "$TOOLPID"
+            st=$?
+            TOOLPID=""
+            [ $st = 124 ] && why="$why; $(basename "$tool") timed out after $EMU_CASE_TIMEOUT s"
+            if [ $expect = 0 ] && [ $st != 0 ]; then why="$why; $(basename "$tool") exited $st"; fi
+            if [ $expect = 1 ] && [ $st = 0 ]; then why="$why; $(basename "$tool") did not fail"; fi
+        done
+        for t in $tools; do
+            tname=$([ $t = a ] && echo sigrok-cli || echo oxrok)
+            emu_tx "$t $name" >"$TMP/$t.tx"
+            v=$(grep -c '^!' "$TMP/$t.tx")
+            emu_case_v=$((emu_case_v + v))
+            # The attach's node names and address made generic first, so
+            # that --filter and --names see the text the goldens hold.
+            for f in out err; do
+                sed -E -f "$TMP/emu.sed" "$TMP/$t.$f" >"$TMP/$t.n" && mv "$TMP/$t.n" "$TMP/$t.$f"
+            done
+            to_cmp $t
+            # The version line goes even with --keep-header, so goldens
+            # do not change with the tools' versions.
+            sed -E '1{/^(libsigrok|sigrok-cli|oxrok) /d;}' "$TMP/$t.cmp" >"$TMP/$t.n"
+            mv "$TMP/$t.n" "$TMP/$t.cmp"
+            if [ "$v" != 0 ]; then
+                why="$why; violations under $tname: $(grep -m1 '^!' "$TMP/$t.tx")"
+            fi
+            # Full or oracle, an empty output is a case that never got to
+            # the device, unless --no-output asks for it.
+            if [ $no_output = 0 ] && ! [ -s "$TMP/$t.cmp" ]; then why="$why; no output from $tname"; fi
+            if [ $no_output = 1 ] && [ -s "$TMP/$t.cmp" ]; then why="$why; output from $tname where none was expected"; fi
+        done
+        if [ $mode = full ]; then
+            cmp -s "$TMP/a.cmp" "$TMP/b.cmp" || why="$why; outputs differ"
+            cmp -s "$TMP/a.tx" "$TMP/b.tx" || why="$why; transactions differ"
+        fi
+        golden=$EMU_GOLDEN/$EMU_MODEL/$slug
+        blessed=""
+        if [ "$EMU_BLESS" = 1 ]; then
+            mkdir -p "$EMU_GOLDEN/$EMU_MODEL"
+            cp "$TMP/a.cmp" "$golden.out"; cp "$TMP/a.tx" "$golden.tx"
+            blessed=" (golden written)"
+        elif [ -f "$golden.out" ] && [ -f "$golden.tx" ]; then
+            for t in $tools; do
+                cmp -s "$golden.out" "$TMP/$t.cmp" || why="$why; $([ $t = a ] && echo sigrok-cli || echo oxrok) output differs from $slug.out"
+                cmp -s "$golden.tx" "$TMP/$t.tx" || why="$why; $([ $t = a ] && echo sigrok-cli || echo oxrok) transactions differ from $slug.tx"
+            done
+        elif [ $mode = oracle ]; then
+            why="$why; no golden $golden.out/.tx (EMU_BLESS=1 writes it)"
+        fi
+        if [ -z "$why" ]; then
+            pass=$((pass + 1))
+            echo "PASS $name ($mode, $(wc -l <"$TMP/a.tx" | tr -d ' ') transactions)$blessed"
+        else
+            emu_fail "$name ($mode):${why#;} [$*]"
+            if [ $mode = full ] && ! cmp -s "$TMP/a.cmp" "$TMP/b.cmp"; then
+                diff "$TMP/a.cmp" "$TMP/b.cmp" | head -${DIFF_LINES:-6}
+            elif [ $mode = full ] && ! cmp -s "$TMP/a.tx" "$TMP/b.tx"; then
+                diff "$TMP/a.tx" "$TMP/b.tx" | head -${DIFF_LINES:-6}
+            elif [ -f "$golden.out" ] && ! cmp -s "$golden.out" "$TMP/a.cmp"; then
+                diff "$golden.out" "$TMP/a.cmp" | head -${DIFF_LINES:-6}
+            elif [ -f "$golden.tx" ] && ! cmp -s "$golden.tx" "$TMP/a.tx"; then
+                diff "$golden.tx" "$TMP/a.tx" | head -${DIFF_LINES:-6}
+            fi
+        fi
+    }
+
+    # One model: lock, clean up, attach, cases, detach, unlock.
+    emu_session() {
+        [ -e "$EMU_LOCK" ] || (umask 0; : >>"$EMU_LOCK")
+        if ! exec 8<"$EMU_LOCK"; then emu_fail "$EMU_MODEL: cannot open $EMU_LOCK"; return; fi
+        if ! flock -n 8; then
+            echo "waiting for $EMU_LOCK (another emulator session)"
+            if ! flock -w "$EMU_LOCK_WAIT" 8; then
+                exec 8<&-
+                emu_fail "$EMU_MODEL: $EMU_LOCK still held after $EMU_LOCK_WAIT s"; return
+            fi
+        fi
+        # A run that crashed may have left its device attached.
+        sudo -n "$EMU" cleanup || echo "emulator cleanup failed; carrying on with a free port"
+        if [ $gcov = 1 ]; then
+            emu_gcov zero || emu_fail "$EMU_MODEL: emu-gcov.sh zero failed"
+        fi
+        emu_slugs=""
+        emu_case_v=0
+        if emu_start; then
+            emu_cases
+            emu_stop
+            st=$?
+            [ $st = 0 ] || [ $st = 2 ] || emu_fail "$EMU_MODEL session: the emulator exited with $st"
+            # Violations no case reported: during the attach or the
+            # detach, or logged after a case had read its section.
+            total=$(grep -c '^!' "$EMULOG/$EMU_MODEL.log")
+            n=$((total - emu_case_v))
+            if [ "$n" != 0 ]; then
+                emu_fail "$EMU_MODEL session: $n violations outside what the cases checked"
+                awk '/^# section / { s = substr($0, 11) } /^!/ { print "  [" s "] " $0 }' "$EMULOG/$EMU_MODEL.log" | head -5
+            fi
+        else
+            emu_fail "$EMU_MODEL: the emulator did not start"
+            emu_stop >/dev/null 2>&1
+        fi
+        if [ $gcov = 1 ]; then
+            if emu_gcov report >"$TMP/gcov.txt"; then
+                if [ -z "$filter" ]; then
+                    mkdir -p "$EMU_GOLDEN/$EMU_MODEL"
+                    cp "$TMP/gcov.txt" "$EMU_GOLDEN/$EMU_MODEL/gcov.txt"
+                    echo "gcov: $EMU_GOLDEN/$EMU_MODEL/gcov.txt: $(grep '^  total' "$TMP/gcov.txt" | tr -s ' ' | tr '\n' ';')"
+                else
+                    # A subset of the cases says nothing about the whole.
+                    cat "$TMP/gcov.txt"
+                fi
+            else
+                emu_fail "$EMU_MODEL: emu-gcov.sh report failed; gcov.txt left as it was"
+            fi
+        fi
+        exec 8<&-
+        # Goldens no case wrote, after a full run of the model.
+        if [ -z "$filter" ] && [ -d "$EMU_GOLDEN/$EMU_MODEL" ]; then
+            for g in "$EMU_GOLDEN/$EMU_MODEL"/*.out; do
+                [ -f "$g" ] || continue
+                slug=$(basename "$g" .out)
+                case " $emu_slugs " in *" $slug "*) continue ;; esac
+                if [ "$EMU_BLESS" = 1 ]; then
+                    rm -f "$g" "${g%.out}.tx"; echo "removed golden $slug of $EMU_MODEL: no case has it"
+                else
+                    echo "note: golden $slug of $EMU_MODEL belongs to no case (EMU_BLESS=1 removes it)"
+                fi
+            done
+        fi
+    }
+
+    # emu_gcov zero|report: tools/emu-gcov.sh on each of the model's
+    # libsigrok driver directories; fails when one of them fails.
+    emu_gcov() {
+        gst=0
+        for d in ${EMU_GCOV:-$EMU_DRIVER}; do sh "$TOOLS/emu-gcov.sh" "$d" "$1" || gst=1; done
+        return $gst
+    }
+
+    found=""
+    for f in "$TOOLS"/emu/*.sh; do
+        [ -f "$f" ] || continue
+        EMU_MODEL=""; EMU_OPTIONS=""; EMU_DRIVER=""; EMU_GCOV=""; EMU_FULL=""
+        emu_cases() { emu_fail "$f: no emu_cases function"; }
+        . "$f"
+        [ -n "$EMU_MODEL" ] || { emu_fail "$f: no EMU_MODEL"; continue; }
+        if [ -n "$emu_models" ]; then
+            case " $emu_models " in *" $EMU_MODEL "*) ;; *) continue ;; esac
+        fi
+        found="$found $EMU_MODEL"
+        emu_session
+    done
+    for m in $emu_models; do
+        case " $found " in *" $m "*) ;; *) emu_fail "--emu-model $m: no tools/emu/*.sh sets EMU_MODEL=$m" ;; esac
+    done
 fi
 
 echo "$pass passed, $fail failed"

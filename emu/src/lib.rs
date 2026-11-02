@@ -5,7 +5,10 @@
 //! the same model runs in a unit test, on this server and, later, on a
 //! microcontroller. [`device::Device`] wraps a model with the standard
 //! requests every USB device answers (descriptors, configuration,
-//! status, halts) and the checks on what the host sends. [`usbip`] is
+//! status, halts) and the checks on what the host sends. [`shells`]
+//! carry what every device of a kind shares (HID so far), and
+//! [`models`] holds the devices, one file each, found by `build.rs`.
+//! [`usbip`] is
 //! the USB/IP server the Linux `vhci-hcd` module connects to, and
 //! [`vhci`] attaches and detaches through its sysfs files, so no
 //! `usbip` tool is needed. Everything the host does goes to a
@@ -20,9 +23,9 @@
 
 pub mod descriptor;
 pub mod device;
-pub mod hid;
 pub mod model;
 pub mod models;
+pub mod shells;
 pub mod txlog;
 pub mod usbip;
 pub mod vhci;

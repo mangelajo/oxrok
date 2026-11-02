@@ -125,25 +125,61 @@ is how a driver is verified against sigrok-cli without the hardware
   so a model runs in a unit test, on this server and, later, on a
   Pico. `Device` (`device.rs`) wraps it with the standard requests
   every device answers (descriptors, configuration, status, halts) and
-  the checks on every transfer; `hid.rs` is the first transport shell:
-  the HID class descriptor, the report descriptor fetch, `GET_REPORT`,
-  `SET_REPORT`, idle and protocol. Models live in `emu/src/models`;
-  `oxrok-emu list` names them.
+  the checks on every transfer.
+- Transport shells, in `emu/src/shells`, carry what every device of a
+  kind shares, and a model fills in what its own protocol means.
+  `shells/hid.rs` is the first: the HID class descriptor, the report
+  descriptor fetch, `GET_REPORT`, `SET_REPORT`, idle and protocol, with
+  the model answering the reports through `HidReports`. FTDI and
+  EZ-USB come next, then CDC-ACM and USBTMC.
+- Models live in `emu/src/models`, one file `NAME.rs` or one directory
+  `NAME/mod.rs` each, and nothing else names them: `emu/build.rs` finds
+  them and generates the module declarations, the table
+  `oxrok-emu list` prints and the dispatch `serve NAME` uses. A model
+  module exports `pub const NAME: &str` (its file name; a `-` in it
+  becomes `_` in the module identifier), `pub const ABOUT: &str` (one
+  line: the device and its options) and
+  `pub fn build(options: &[(String, String)]) -> Result<Box<dyn DeviceModel>>`,
+  which parses the `-o KEY=VALUE` options and rejects unknown ones. A
+  unit test checks that each `NAME` is its file name and that each
+  model builds with no options.
 - `sudo oxrok-emu serve MODEL --attach --open-devices --log FILE`
   listens on TCP (`--listen`, port 0 picks a free one), imports the
   device over its own loopback connection, and writes
   `port sockfd devid speed` to `/sys/devices/platform/vhci_hcd.0/attach`,
   as `usbip attach` would; no usbip tool is involved, but root is.
   Once the kernel has configured the device it prints
-  `READY port=N busid=B nodes=/dev/...`; `--open-devices` makes those
-  nodes world accessible so the tools under test run as a user. On
-  standard input, each acknowledged with an `OK` line: `section NAME`
-  marks the log, `reset` puts a fresh model behind the attached device
-  (its initial state, for a second run; the kernel keeps seeing the
-  device it enumerated), `detach` ends the run, as does end of input
-  or a termination signal. The exit status is 2 when a violation was
-  logged. Without `--attach` it is a plain USB/IP server a `usbip`
-  client can import `1-1` from.
+  `READY port=N busid=B usb=BUS.ADDR usbfs=/dev/bus/usb/BBB/DDD nodes=/dev/...`:
+  `usb` is the `bus.address` pair libusb drivers take in `conn=`,
+  `usbfs` the raw node libusb and libftdi open, `nodes` those of the
+  kernel's class drivers (`/dev/hidrawN`, `/dev/ttyACMN`, `/dev/usbtmcN`).
+  `--open-devices` makes all of them world accessible so the tools
+  under test run as a user. udev applies its own mode to a new node
+  some time after the kernel creates it, so the server waits for
+  `udevadm settle`, changes the modes, and checks them again after a
+  second settle; `vhci::open_device` does all of it and is what a
+  device that reappears under a new address (EZ-USB renumeration)
+  calls again. On standard input, each acknowledged with an `OK` line:
+  `section NAME` marks the log, `reset` puts a fresh model behind the
+  attached device (its initial state, for a second run; the kernel
+  keeps seeing the device it enumerated), `detach` ends the run, as
+  does end of input or a termination signal. The exit status is 2 when
+  a violation was logged. Without `--attach` it is a plain USB/IP
+  server a `usbip` client can import `1-1` from. A device that never
+  configures is detached before the server exits with an error.
+- `sudo oxrok-emu cleanup` detaches the ports a run left attached when
+  its server hung: those whose `devid` in the controller's `status` is
+  an oxrok-emu one (bus `0x6f78`, "ox", in the upper half), or with
+  `--all` every attached port. A server that dies outright needs
+  nothing, as the controller frees the port when the connection
+  closes. Each server announces a device number (the lower half) no
+  attached oxrok-emu port has, taken from its process id, and detaches
+  its port on the way out only while the port still shows its own
+  `devid`. `detach` takes a bare port number, and `free_port` hands
+  the lowest free one to the next server, so without this a server
+  whose device a `cleanup` had removed would, when it ended, remove
+  the next server's device from the same port. Such a server says that
+  its device was detached by someone else and exits with status 1.
 - The transaction log is the fixture dialect above, one line per
   completed transfer: `ctl_in 21 01 0300 0000 8 -> 4142434445000000`,
   `ctl_out 21 09 0300 0000 ff02000000000000 -> ok`, `int_in`,
@@ -162,10 +198,105 @@ is how a driver is verified against sigrok-cli without the hardware
   lengths other than 8, report ids, unknown commands, relay numbers
   beyond the board). A clean run under sigrok-cli validates the
   model, a clean run under oxrok validates the port.
-- `tools/diffcli.sh --emu` starts the server, attaches each model and
-  runs its cases: besides the output, each case compares the
-  transactions the two tools caused and fails on any violation under
-  either. `EMULOG=FILE` keeps the log.
+
+### Scenarios
+
+`tools/diffcli.sh --emu` runs, after the software cases, one session
+per scenario file `tools/emu/MODEL.sh`. The file is sourced; it sets
+`EMU_MODEL` (the `oxrok-emu` model name), optionally `EMU_OPTIONS`
+(`-o relays=2`), `EMU_DRIVER` (the sigrok driver ids its cases use,
+the first being the default) and `EMU_GCOV` (the libsigrok driver
+directories `--gcov` measures, default `EMU_DRIVER`), and defines a
+function `emu_cases` of `emu_case NAME [flags] -- ARGS...` lines.
+`EMU_FULL` lists the drivers oxrok has ported: a case of one of them
+that `oxrok -L` does not list fails, rather than quietly turning into
+an oracle case, and an `oxrok -L` that fails or lists no driver fails
+the run. A case name neither starts nor ends with white space and holds
+no tab or newline, since the emulator trims what it acknowledges.
+`--emu-model NAME` (repeatable, or a comma list) runs only those
+models and no other cases; `-k` still selects cases by name.
+
+A session takes an exclusive `flock` on `/tmp/oxrok-emu.lock`
+(`EMU_LOCK`; waiting up to `EMU_LOCK_WAIT`, 1800 s), so several runs on
+one machine take turns at the controller. Under the lock it runs
+`oxrok-emu cleanup`, starts the server, waits for `READY`, runs the
+cases, detaches and checks that no violation was logged outside the
+cases (during the attach or the detach, or logged after a case read its
+section: the session counts every violation in the log against those
+the cases reported). If the server dies, is stopped (process state
+`T`) or does not answer within 15 s, the remaining cases fail at once,
+and the session ends it with a TERM, then a KILL (with a CONT, so that
+a stopped sudo goes too), fails and releases the lock. An interrupt
+(INT, TERM, HUP) stops the whole run: the tool running is terminated,
+the device detached and the lock released. The lock is the session's,
+not the server's (sudo closes inherited descriptors): a server left
+behind by a session that was killed outright keeps running until its
+end of input closes, but the `devid` check above keeps it away from
+the next session's device. The `READY`
+values are exported to the cases as `EMU_PORT`, `EMU_BUSID`, `EMU_USB`,
+`EMU_USBFS`, `EMU_NODES` (comma separated) and the first node of each
+kind as `EMU_HIDRAW`, `EMU_TTY` and `EMU_USBTMC`; a case that selects
+the device by path uses them (`conn=$EMU_HIDRAW`), never a fixed
+`/dev/hidraw0`.
+
+Each case runs every tool against a fresh model (a `reset`) in its own
+log section. Its output first has the node numbers and the device
+address made generic (`/dev/hidrawN`, `/dev/bus/usb/BBB/DDD`,
+`conn=BUS.ADDR`), since they change from one attach to the next, then
+is prepared as `case_` prepares it (header, `--filter`, `--names`), so
+a `--filter` sees the text the goldens hold, and the version line goes
+even under `--keep-header`. `--filter` and `--names` apply to the
+output only, never to the transactions. Every tool must print
+something (`--no-output` asks for nothing instead, for a `--set`),
+full case or oracle case. What else is checked depends on oxrok:
+
+- When `oxrok -L` lists the case's driver, the case is full: both tools
+  run (each stopped after `EMU_CASE_TIMEOUT`, 60 s, so a tool stuck on
+  the model does not hold the lock), must exit 0 (non-zero with
+  `--expect-fail`), give the same
+  output and cause the same transactions (the log lines of the
+  section, `#` comments dropped), with no violation under either.
+- Otherwise it is an oracle case, the state of a model written before
+  its driver is ported: sigrok-cli alone, which must exit as expected
+  and log no violation.
+- Either way the output and the transactions are compared with the
+  goldens `tests/emu/MODEL/SLUG.out` and `SLUG.tx` (`SLUG` is the case
+  name in lower case, runs of other characters made `-`), the
+  sigrok-cli run's as `EMU_BLESS=1` wrote them, so a later change in
+  either tool shows. An oracle case without goldens fails; a full case
+  without them passes on the comparison of the two tools. With
+  `EMU_BLESS=1` every case writes its goldens instead of comparing
+  them (`(golden written)` after its `PASS`), and a full run of a model
+  removes the goldens no case wrote any more.
+
+`--gcov` (which implies `--emu`) zeroes the coverage counters of each
+model's libsigrok drivers before its session (`tools/emu-gcov.sh DRIVER zero`)
+and writes `tests/emu/MODEL/gcov.txt` after it
+(`tools/emu-gcov.sh DRIVER report`): per source file the share of
+executable lines the cases reached, the total, and the lines never
+reached, as ranges per function, a function never called said so.
+With `-k` the report is printed, not kept, since a subset of the cases
+says nothing about the whole. A failing `emu-gcov.sh` (a directory in
+`EMU_GCOV` that does not exist: driver ids and directory names differ,
+`uni-t-ut61e` lives in `uni-t-dmm`) fails the session and leaves
+`gcov.txt` as it was; a report that finds no executable line of the
+driver is a failure too. The oracle is the libsigrok built with
+`--coverage` (`docs/DEVICES.md`, "Oracle"); libtool's PIC objects in
+`.libs` are the ones `libsigrok.so` is linked from, so their `.gcda`
+files hold the counts. Other drivers' runs at the same time only add
+zero counts to this driver's files.
+
+Drivers that upload firmware get stand-ins: `tools/emu/MODEL.firmware`
+lists `NAME SIZE` lines (`#` comments), and `tools/emu-firmware.sh`,
+which `--emu` runs first, writes each file into
+`~/work/sigrok/firmware-standin` (`EMU_FIRMWARE_DIR`) as the SHA-256
+digest of its name repeated to its size, rewriting only files whose
+bytes changed. The directory is exported as `SIGROK_FIRMWARE_DIR`,
+which libsigrok's `resource.c` searches first and oxrok searches right
+after its own `OXROK_FIRMWARE_DIR` (`src/core/firmware.rs`), which the
+harness unsets, so both tools upload the same bytes, and the model checks the size and treats
+the content as opaque. `EMULOG=DIR` keeps each session's log as
+`DIR/MODEL.log`.
 
 What the first model taught: the kernel's HID name joins manufacturer
 and product (`www.dcttech.com USBRelay2`), while hidapi reports the
@@ -176,6 +307,71 @@ takes the STALL; `vhci_hcd: vhci_device speed not set` in `dmesg`
 during the attach is harmless. A USB/IP server must not close its end
 while attached, so the process keeps the socket it handed to the
 kernel until it detaches.
+
+### Writing a device model
+
+Every file below is the model's own, so models written in parallel,
+each in its own worktree, merge without conflicts. For a model `NAME`
+of a sigrok driver `DRIVER`:
+
+1. Read the C driver (`api.c`, `protocol.c`) and, where there is one,
+   the datasheet or the firmware source, for what the device answers
+   and what the driver may send. Pick the shell (`emu/src/shells`) the
+   device builds on; a shell that does not exist yet is a separate
+   piece of work, not part of a model.
+2. Write `emu/src/models/NAME.rs`, or for a model with submodules
+   `emu/src/models/NAME/mod.rs` with the submodules beside it in
+   `NAME/` (the generated `#[path]` declaration would make rustc look
+   for the submodules of a `NAME.rs` in `models/`, so `build.rs`
+   refuses `NAME.rs` next to a directory `NAME`; `tests` is a fine
+   name, files starting with `.` are skipped):
+   the descriptors as the real device has them (ids, strings, speed,
+   endpoints the driver uses), the protocol state machine, a sample
+   generator that starts over on `reset` so both tools see the same
+   samples, `NAME`, `ABOUT` and `build`. Start the file with the
+   "Counterpart in sigrok" header naming the C files it follows, and
+   add `tools/attribution.d/NAME.py` with its `MAP` entry (the format
+   is in `tools/attribution.d/usbrelay.py`). Unit tests drive the
+   model the way the driver does and check one violation of each kind.
+3. Make the pedantic checks bite: report through `Violations` every
+   request the driver is not supposed to send, every length, index,
+   register value or sequence number outside what the C driver's
+   comments and the datasheet allow, and the order where it matters
+   (a capture before its configuration, a read before its write). A
+   model that accepts anything validates nothing.
+4. Write `tools/emu/NAME.sh` with `EMU_MODEL`, `EMU_OPTIONS`,
+   `EMU_DRIVER` and the `emu_cases` (scan, show, each option's get and
+   set, captures at a few rates and sizes, triggers, the selection by
+   `conn=`, and the error answers the driver handles), and
+   `tools/emu/NAME.firmware` when the driver uploads files.
+5. Run it alone, without the software cases:
+   `cargo build --workspace && . ~/work/sigrok/env.sh && sh tools/diffcli.sh --emu-model NAME`.
+   Every case must pass and log no violation under sigrok-cli; a
+   violation there is a fault of the model (or a rule the C driver
+   does not keep, which then goes into the model's comments) until
+   shown otherwise. `EMULOG=/tmp/emu` keeps the log, and
+   `flock /tmp/oxrok-emu.lock sudo target/debug/oxrok-emu serve NAME --attach --open-devices -v`
+   serves the model by hand. Take the lock, as that line does, whenever
+   other agents may be running sessions: a device served beside a
+   session's device makes the session's cases see two, and a session's
+   `cleanup` would detach the hand-served one.
+6. Bless the goldens, `EMU_BLESS=1 sh tools/diffcli.sh --emu-model NAME`,
+   read them (they are the reference from now on), and run again
+   without `EMU_BLESS` to see them pass. Commit them.
+7. Measure: `sh tools/diffcli.sh --emu-model NAME --gcov` writes
+   `tests/emu/NAME/gcov.txt`. Read the unreached ranges against the C
+   source: add cases for the paths a device can take, and leave those
+   it cannot (allocation failures, transport errors, model variants
+   nobody has) as the "not emulated" list. The roadmap's criterion 4
+   stops there.
+8. In `docs/DEVICES.md`, in the driver's entry (or a new one): that it
+   is emulated, the model's name and options, the cases, the date, the
+   gcov total with the "not emulated" paths named, and anything the
+   model taught about the driver. The README table says "emulator"
+   only once oxrok's port passes the same cases as full cases.
+9. Before handing over: `cargo fmt --all --check`,
+   `cargo clippy --workspace --all-targets` with no warning,
+   `cargo test --workspace`, and `sh tools/diffcli.sh --emu-model NAME`.
 
 ## Troubleshooting
 
